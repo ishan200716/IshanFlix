@@ -1,0 +1,840 @@
+/* IshanFlix Multiplayer & Playback Sync Styles */
+:root {
+  --if-party-bg: rgba(14, 14, 17, 0.94);
+  --if-party-border: rgba(255, 255, 255, 0.12);
+  --if-party-accent: #3b82f6;
+  --if-party-accent-glow: rgba(59, 130, 246, 0.4);
+  --if-party-green: #10b981;
+  --if-party-amber: #f59e0b;
+  --if-party-red: #ef4444;
+}
+
+/* Floating Watch Party FAB Dock (Always accessible anywhere on the screen) */
+.ishan-party-floating-dock {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Master Party Pause/Play Button */
+.ishan-party-pause-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(18, 18, 22, 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 10px 18px;
+  border-radius: 9999px;
+  color: #fff;
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.ishan-party-pause-btn:hover {
+  background: rgba(28, 28, 36, 0.98);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.85);
+}
+
+.ishan-party-pause-btn.is-paused {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #fca5a5;
+  box-shadow: 0 0 25px rgba(239, 68, 68, 0.35);
+}
+
+.ishan-party-floating-fab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 15, 18, 0.9);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 10px 18px;
+  border-radius: 9999px;
+  color: #fff;
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ishan-party-floating-fab:hover {
+  background: rgba(24, 24, 30, 0.98);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 12px 38px rgba(0, 0, 0, 0.8), 0 0 20px rgba(59, 130, 246, 0.35);
+}
+
+.ishan-party-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--if-party-green);
+  box-shadow: 0 0 8px var(--if-party-green);
+  animation: ifLivePulse 1.8s infinite;
+}
+
+@keyframes ifLivePulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+/* Floating Reactions Container (Over Video / 3D Theatre) */
+.ishan-reactions-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 92;
+}
+
+.ishan-floating-emoji {
+  position: absolute;
+  bottom: 60px;
+  font-size: 44px;
+  animation: ifFloatUp 2.8s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,0.7));
+  pointer-events: none;
+  user-select: none;
+}
+
+@keyframes ifFloatUp {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.4) rotate(0deg);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-40px) scale(1.25) rotate(-10deg);
+  }
+  75% {
+    opacity: 0.95;
+    transform: translateY(-320px) scale(1.05) rotate(14deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-460px) scale(0.8) rotate(22deg);
+  }
+}
+
+/* Synchronized Party Pause Overlay Curtain */
+.ishan-pause-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 85;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+
+.ishan-pause-overlay.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ishan-pause-card {
+  background: rgba(20, 20, 26, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 24px;
+  padding: 32px 36px;
+  text-align: center;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85);
+  max-width: 440px;
+  width: 90%;
+  transform: scale(0.92);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #fff;
+}
+
+.ishan-pause-overlay.is-visible .ishan-pause-card {
+  transform: scale(1);
+}
+
+.ishan-pause-icon {
+  font-size: 42px;
+  margin-bottom: 12px;
+  display: inline-block;
+  animation: ifLivePulse 2s infinite;
+}
+
+.ishan-pause-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+
+.ishan-pause-by {
+  font-size: 13.5px;
+  color: #a1a1aa;
+  margin-bottom: 22px;
+}
+
+.ishan-pause-resume-btn {
+  background: #fff;
+  color: #000;
+  border: none;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px 28px;
+  border-radius: 9999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 4px 18px rgba(255, 255, 255, 0.2);
+}
+
+.ishan-pause-resume-btn:hover {
+  background: #f0f0f0;
+  transform: translateY(-1px) scale(1.02);
+}
+
+/* Watch Party Sidebar / Panel */
+.ishan-party-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 390px;
+  max-width: 92vw;
+  background: rgba(12, 12, 15, 0.95);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  z-index: 105;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -12px 0 45px rgba(0, 0, 0, 0.8);
+  transform: translateX(100%);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+
+.ishan-party-panel.is-open {
+  transform: translateX(0);
+}
+
+/* Backdrop when panel is open */
+.ishan-party-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.ishan-party-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Panel Header */
+.ishan-panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ishan-panel-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ishan-panel-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.ishan-close-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #aaa;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ishan-close-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+/* Room Code Card */
+.ishan-room-card {
+  margin: 14px 18px 8px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ishan-room-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.ishan-room-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #888;
+  font-weight: 600;
+}
+
+.ishan-room-code {
+  font-family: monospace;
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.12em;
+}
+
+.ishan-copy-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 7px 14px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.ishan-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+/* Playback Sync Status Box */
+.ishan-sync-box {
+  margin: 6px 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ishan-sync-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ishan-sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ishan-sync-status.is-synced {
+  color: #34d399;
+}
+
+.ishan-sync-status.is-drifting {
+  color: #fbbf24;
+}
+
+.ishan-sync-time {
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: #e5e5e5;
+}
+
+.ishan-resync-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.ishan-resync-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Host Controls */
+.ishan-host-controls {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  gap: 8px;
+}
+
+.ishan-host-btn {
+  flex: 1;
+  padding: 6px 10px;
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #93c5fd;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.ishan-host-btn:hover {
+  background: rgba(59, 130, 246, 0.28);
+  color: #fff;
+}
+
+/* Participants List */
+.ishan-participants-wrap {
+  padding: 10px 18px 4px;
+}
+
+.ishan-section-heading {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 700;
+  color: #71717a;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ishan-participant-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 85px;
+  overflow-y: auto;
+}
+
+.ishan-participant-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  font-size: 12px;
+  color: #e4e4e7;
+}
+
+.ishan-avatar-circle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.ishan-crown-icon {
+  font-size: 11px;
+}
+
+/* Live Chat Area */
+.ishan-chat-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 6px;
+}
+
+.ishan-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ishan-chat-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 88%;
+}
+
+.ishan-chat-msg.is-me {
+  align-self: flex-end;
+}
+
+.ishan-chat-msg.is-other {
+  align-self: flex-start;
+}
+
+.ishan-chat-msg.is-system {
+  align-self: center;
+  max-width: 100%;
+}
+
+.ishan-msg-system-text {
+  font-size: 11px;
+  color: #71717a;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 3px 10px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ishan-msg-sender {
+  font-size: 10.5px;
+  color: #a1a1aa;
+  margin-bottom: 2px;
+  padding-left: 2px;
+}
+
+.ishan-msg-bubble {
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.ishan-chat-msg.is-me .ishan-msg-bubble {
+  background: #2563eb;
+  color: #fff;
+  border-bottom-right-radius: 2px;
+}
+
+.ishan-chat-msg.is-other .ishan-msg-bubble {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f4f4f5;
+  border-bottom-left-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Floating Reactions Bar in Panel */
+.ishan-reactions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ishan-reaction-btn {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ishan-reaction-btn:hover {
+  transform: scale(1.3);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ishan-reaction-btn:active {
+  transform: scale(0.9);
+}
+
+/* Chat Input Bar */
+.ishan-chat-input-bar {
+  padding: 10px 14px 14px;
+  background: rgba(10, 10, 12, 0.85);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ishan-chat-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  padding: 9px 14px;
+  border-radius: 9999px;
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.ishan-chat-input:focus {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.ishan-chat-send-btn {
+  background: #fff;
+  color: #000;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.ishan-chat-send-btn:hover {
+  transform: scale(1.06);
+}
+
+/* Modal for Creating / Joining Room */
+.ishan-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.ishan-modal-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ishan-modal-dialog {
+  width: 100%;
+  max-width: 440px;
+  background: #0d0d10;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8);
+  font-family: 'Inter', -apple-system, sans-serif;
+  color: #fff;
+  transform: scale(0.94);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ishan-modal-overlay.is-open .ishan-modal-dialog {
+  transform: scale(1);
+}
+
+.ishan-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.ishan-modal-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.ishan-modal-sub {
+  font-size: 13px;
+  color: #a1a1aa;
+  margin-top: 3px;
+}
+
+.ishan-modal-tabs {
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ishan-modal-tab {
+  flex: 1;
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: transparent;
+  color: #a1a1aa;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ishan-modal-tab.is-active {
+  background: #fff;
+  color: #000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.ishan-modal-input-group {
+  margin-bottom: 16px;
+}
+
+.ishan-modal-label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #71717a;
+  margin-bottom: 6px;
+}
+
+.ishan-modal-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.ishan-modal-input:focus {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.ishan-modal-btn-primary {
+  width: 100%;
+  padding: 13px;
+  background: #fff;
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: transform 0.15s, opacity 0.2s;
+}
+
+.ishan-modal-btn-primary:hover {
+  transform: translateY(-1px);
+  opacity: 0.95;
+}
+
+.ishan-modal-btn-primary:active {
+  transform: translateY(1px);
+}
+
+/* Toast Notification */
+.ishan-party-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(20, 20, 24, 0.95);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 12px 24px;
+  border-radius: 9999px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  z-index: 250;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ishan-party-toast.is-show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* Navbar Party Button */
+.ishan-nav-party-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+.ishan-nav-party-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
