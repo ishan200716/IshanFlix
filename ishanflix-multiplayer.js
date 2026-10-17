@@ -207,11 +207,24 @@
 
         // If I am host, send initial room state to new peer
         if (this.isHost) {
+          let theatreMedia = null;
+          if (window.__cinema && window.__cinema.currentUrl) {
+            theatreMedia = {
+              url: window.__cinema.currentUrl,
+              meta: {
+                title: (window.__cinema.overlayTitle && window.__cinema.overlayTitle.textContent) || this.currentMedia?.title || 'Now Playing',
+                poster: this.currentMedia?.poster || ''
+              },
+              currentTime: this.getEstimatedTime(),
+              isPlaying: this.isPlaying
+            };
+          }
           conn.send({
             type: 'ROOM_STATE_FULL',
             roomId: this.roomId,
             hostId: this.myId,
             hostName: this.myName,
+            theatreMedia: theatreMedia,
             media: this.currentMedia || this.detectCurrentPageMedia(),
             playback: {
               isPlaying: this.isPlaying,
@@ -297,7 +310,25 @@
         case 'ROOM_STATE_FULL': {
           this.hostId = data.hostId;
           this.hostName = data.hostName;
-          if (data.media) {
+          if (data.theatreMedia && window.__cinema && data.theatreMedia.url) {
+            this._isRemotePlay = true;
+            try {
+              window.__cinema.playOnScreen(data.theatreMedia.url, data.theatreMedia.meta);
+              this.currentMedia = {
+                title: data.theatreMedia.meta?.title || 'Now Playing',
+                url: data.theatreMedia.url,
+                poster: data.theatreMedia.meta?.poster || ''
+              };
+              this.currentTime = data.theatreMedia.currentTime || 0;
+              this.isPlaying = data.theatreMedia.isPlaying !== false;
+              this.lastUpdated = Date.now();
+              setTimeout(() => {
+                this.sendUniversalPlayerCommand('seek', this.currentTime);
+              }, 1200);
+            } finally {
+              this._isRemotePlay = false;
+            }
+          } else if (data.media) {
             this.syncMediaTo(data.media);
           }
           if (data.playback) {
@@ -327,6 +358,44 @@
 
         case 'PARTY_PLAY_COMMAND': {
           this.applyLocalPartyPlay(data.resumedBy, data.time);
+          break;
+        }
+
+        case 'PARTY_COUNTDOWN_START': {
+          this.executeCountdown(data.scheduledStart, data.targetTime, data.resumedBy);
+          break;
+        }
+
+        case 'PARTY_NUDGE_TIME': {
+          this.applyNudge(data.deltaSec, data.by);
+          break;
+        }
+
+        case 'PARTY_HARD_SYNC': {
+          this.hardReloadIframeAtTime(data.targetTime);
+          break;
+        }
+
+        case 'THEATRE_PLAY_MEDIA': {
+          this.addSystemMessage(`🎬 ${data.startedBy || 'Host'} started playing "${data.media?.title || 'movie'}" on the IMAX screen!`);
+          this.showToast(`🎬 Now Playing: ${data.media?.title || 'Movie'}`);
+          this.currentMedia = data.media;
+          this.currentTime = 0;
+          this.isPlaying = true;
+          this.lastUpdated = Date.now();
+          if (window.__cinema && data.media?.url) {
+            this._isRemotePlay = true;
+            try {
+              window.__cinema.playOnScreen(data.media.url, {
+                title: data.media.title,
+                poster: data.media.poster
+              });
+              window.__cinema.ensureSeated();
+            } finally {
+              this._isRemotePlay = false;
+            }
+          }
+          this.updateUi();
           break;
         }
 
@@ -367,6 +436,34 @@
       // Hook into Theatre tick loop
       window.__onCinemaTick = (cinema, dt) => {
         if (!cinema) return;
+
+        // Intercept cinema.playOnScreen to broadcast movie switches to the watch party
+        if (cinema && !cinema._ishanHooked) {
+          cinema._ishanHooked = true;
+          this.cinema = cinema;
+          const origPlay = cinema.playOnScreen.bind(cinema);
+          cinema.playOnScreen = (url, meta) => {
+            origPlay(url, meta);
+            if (this.roomId && !this._isRemotePlay) {
+              const movieTitle = meta?.title || (cinema.overlayTitle && cinema.overlayTitle.textContent) || 'Now Playing';
+              this.currentMedia = {
+                title: movieTitle,
+                url: url,
+                poster: meta?.poster || ''
+              };
+              this.currentTime = 0;
+              this.isPlaying = true;
+              this.lastUpdated = Date.now();
+              this.broadcast({
+                type: 'THEATRE_PLAY_MEDIA',
+                media: this.currentMedia,
+                startedBy: this.myName,
+                timestamp: Date.now()
+              });
+              this.showToast(`📡 Broadcasting "${movieTitle}" to party`);
+            }
+          };
+        }
 
         // 1. Local avatar tracking & broadcast
         if (this.roomId && cinema.pos) {
@@ -468,7 +565,7 @@
       }
     }
 
-    // --- Master Party Pause / Play System ---
+    // --- Master Party Pause / Play & Synchronized Countdown System ---
     togglePartyPausePlay() {
       if (!this.roomId) {
         this.openModal();
@@ -476,18 +573,101 @@
       }
 
       const nextPlaying = !this.isPlaying;
-      const action = nextPlaying ? 'PARTY_PLAY_COMMAND' : 'PARTY_PAUSE_COMMAND';
+      if (nextPlaying) {
+        const targetTime = this.getEstimatedTime();
+        this.startSynchronizedPlay(targetTime, this.myName);
+      } else {
+        const pauseTime = this.getEstimatedTime();
+        this.broadcast({
+          type: 'PARTY_PAUSE_COMMAND',
+          pausedBy: this.myName,
+          time: pauseTime
+        });
+        this.applyLocalPartyPause(this.myName, pauseTime);
+      }
+    }
 
+    startSynchronizedPlay(targetTime, initiatorName) {
+      if (!this.roomId) {
+        this.applyLocalPartyPlay(initiatorName, targetTime);
+        return;
+      }
+
+      const scheduledStart = Date.now() + 2500;
       this.broadcast({
-        type: action,
-        [nextPlaying ? 'resumedBy' : 'pausedBy']: this.myName,
-        time: this.getEstimatedTime()
+        type: 'PARTY_COUNTDOWN_START',
+        scheduledStart: scheduledStart,
+        targetTime: targetTime,
+        resumedBy: initiatorName || this.myName
       });
 
-      if (nextPlaying) {
-        this.applyLocalPartyPlay(this.myName, this.getEstimatedTime());
-      } else {
-        this.applyLocalPartyPause(this.myName, this.getEstimatedTime());
+      this.executeCountdown(scheduledStart, targetTime, initiatorName || this.myName);
+    }
+
+    executeCountdown(scheduledStart, targetTime, actorName) {
+      if (typeof targetTime === 'number') {
+        this.currentTime = targetTime;
+        this.sendUniversalPlayerCommand('seek', targetTime);
+      }
+
+      this.showCountdownOverlay(actorName);
+
+      const updateInterval = setInterval(() => {
+        const remaining = (scheduledStart - Date.now()) / 1000;
+        const countNum = document.getElementById('ishan-countdown-num');
+        const countBar = document.getElementById('ishan-countdown-bar');
+
+        if (countNum) {
+          if (remaining > 1.5) {
+            countNum.textContent = '3';
+            if (countBar) countBar.style.width = '33%';
+          } else if (remaining > 0.6) {
+            countNum.textContent = '2';
+            if (countBar) countBar.style.width = '66%';
+          } else if (remaining > 0) {
+            countNum.textContent = '1';
+            if (countBar) countBar.style.width = '100%';
+          } else {
+            countNum.textContent = '🍿 PLAY!';
+            clearInterval(updateInterval);
+
+            this.applyLocalPartyPlay(actorName, targetTime);
+
+            setTimeout(() => {
+              this.hideCountdownOverlay();
+            }, 600);
+          }
+        } else {
+          clearInterval(updateInterval);
+        }
+      }, 50);
+    }
+
+    showCountdownOverlay(actorName) {
+      let overlay = document.getElementById('ishan-countdown-overlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'ishan-countdown-overlay';
+        overlay.className = 'ishan-countdown-overlay';
+        overlay.innerHTML = `
+          <div class="ishan-countdown-card">
+            <div class="ishan-countdown-badge">⚡ SYNCING PARTY PLAYBACK</div>
+            <div class="ishan-countdown-number" id="ishan-countdown-num">3</div>
+            <div class="ishan-countdown-bar-wrap">
+              <div class="ishan-countdown-bar" id="ishan-countdown-bar"></div>
+            </div>
+            <div class="ishan-countdown-subtitle">Starting simultaneously with ${escapeHtml(actorName || 'Host')}</div>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+      }
+      overlay.classList.add('is-visible');
+    }
+
+    hideCountdownOverlay() {
+      const overlay = document.getElementById('ishan-countdown-overlay');
+      if (overlay) {
+        overlay.classList.remove('is-visible');
       }
     }
 
@@ -496,27 +676,12 @@
       if (typeof time === 'number') this.currentTime = time;
       this.lastUpdated = Date.now();
 
-      // Pause native video
-      const video = document.querySelector('video');
-      if (video && !video.paused) {
-        try { video.pause(); } catch (e) {}
-      }
+      this.sendUniversalPlayerCommand('pause');
 
-      // Send postMessage pause to all iframes
-      const iframes = document.querySelectorAll('iframe');
-      iframes.forEach((ifr) => {
-        try {
-          ifr.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*');
-          ifr.contentWindow.postMessage({ type: 'PLAYER_EVENT', data: { event: 'pause' } }, '*');
-          ifr.contentWindow.postMessage({ method: 'pause' }, '*');
-        } catch (e) {}
-      });
-
-      // Show pause overlay curtain
       this.showPauseOverlay(actorName);
       this.updatePauseButtons(false);
       this.addSystemMessage(`⏸ Movie paused for party by ${actorName}`);
-      this.showToast(`⏸ Movie paused for all members by ${actorName}`);
+      this.showToast(`⏸ Movie paused by ${actorName}`);
       this.updateUi();
     }
 
@@ -525,28 +690,90 @@
       if (typeof time === 'number') this.currentTime = time;
       this.lastUpdated = Date.now();
 
-      // Play native video
-      const video = document.querySelector('video');
-      if (video && video.paused) {
-        try { video.play().catch(() => {}); } catch (e) {}
-      }
+      this.sendUniversalPlayerCommand('play');
 
-      // Send postMessage play to iframes
-      const iframes = document.querySelectorAll('iframe');
-      iframes.forEach((ifr) => {
-        try {
-          ifr.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
-          ifr.contentWindow.postMessage({ type: 'PLAYER_EVENT', data: { event: 'play' } }, '*');
-          ifr.contentWindow.postMessage({ method: 'play' }, '*');
-        } catch (e) {}
-      });
-
-      // Hide pause overlay curtain
       this.hidePauseOverlay();
       this.updatePauseButtons(true);
       this.addSystemMessage(`▶ Movie resumed for party by ${actorName}`);
       this.showToast(`▶ Movie resumed by ${actorName}`);
-      this.resyncPlayer(this.currentTime);
+      this.updateUi();
+    }
+
+    sendUniversalPlayerCommand(cmd, value) {
+      // 1. Native HTML5 <video> elements
+      const videos = document.querySelectorAll('video');
+      videos.forEach((v) => {
+        try {
+          if (cmd === 'pause' && !v.paused) v.pause();
+          else if (cmd === 'play' && v.paused) v.play().catch(() => {});
+          else if (cmd === 'seek' && typeof value === 'number') v.currentTime = value;
+        } catch (e) {}
+      });
+
+      // 2. All <iframe> elements (including Theatre screenFrame)
+      const iframes = Array.from(document.querySelectorAll('iframe'));
+      if (window.__cinema && window.__cinema.screenFrame && !iframes.includes(window.__cinema.screenFrame)) {
+        iframes.push(window.__cinema.screenFrame);
+      }
+
+      iframes.forEach((ifr) => {
+        try {
+          if (!ifr.contentWindow) return;
+
+          if (cmd === 'pause') {
+            ifr.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*');
+            ifr.contentWindow.postMessage({ type: 'PAUSE' }, '*');
+            ifr.contentWindow.postMessage({ type: 'PLAYER_EVENT', data: { event: 'pause' } }, '*');
+            ifr.contentWindow.postMessage(JSON.stringify({ context: 'player.js', version: '0.0.10', event: 'pause' }), '*');
+            ifr.contentWindow.postMessage({ method: 'pause' }, '*');
+            ifr.contentWindow.postMessage('pause', '*');
+            ifr.contentWindow.postMessage({ action: 'pause' }, '*');
+          } else if (cmd === 'play') {
+            ifr.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
+            ifr.contentWindow.postMessage({ type: 'PLAY' }, '*');
+            ifr.contentWindow.postMessage({ type: 'PLAYER_EVENT', data: { event: 'play' } }, '*');
+            ifr.contentWindow.postMessage(JSON.stringify({ context: 'player.js', version: '0.0.10', event: 'play' }), '*');
+            ifr.contentWindow.postMessage({ method: 'play' }, '*');
+            ifr.contentWindow.postMessage('play', '*');
+            ifr.contentWindow.postMessage({ action: 'play' }, '*');
+          } else if (cmd === 'seek' && typeof value === 'number') {
+            const timeSec = Math.max(0, Math.floor(value));
+            ifr.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [timeSec, true] }), '*');
+            ifr.contentWindow.postMessage({ type: 'SEEK', data: timeSec }, '*');
+            ifr.contentWindow.postMessage({ type: 'PLAYER_EVENT', data: { event: 'seek', currentTime: timeSec } }, '*');
+            ifr.contentWindow.postMessage(JSON.stringify({ context: 'player.js', version: '0.0.10', event: 'setCurrentTime', value: timeSec }), '*');
+            ifr.contentWindow.postMessage({ method: 'setCurrentTime', value: timeSec }, '*');
+            ifr.contentWindow.postMessage({ action: 'seek', time: timeSec }, '*');
+          }
+        } catch (e) {}
+      });
+    }
+
+    hardReloadIframeAtTime(targetTime) {
+      const iframes = Array.from(document.querySelectorAll('iframe'));
+      if (window.__cinema && window.__cinema.screenFrame && !iframes.includes(window.__cinema.screenFrame)) {
+        iframes.push(window.__cinema.screenFrame);
+      }
+      const timeSec = Math.max(0, Math.floor(targetTime));
+      iframes.forEach((ifr) => {
+        try {
+          if (!ifr.src || ifr.src === 'about:blank') return;
+          const url = new URL(ifr.src);
+          url.searchParams.set('startAt', timeSec.toString());
+          url.searchParams.set('t', timeSec.toString());
+          url.searchParams.set('time', timeSec.toString());
+          url.searchParams.set('autoplay', this.isPlaying ? 'true' : 'false');
+          ifr.src = url.toString();
+        } catch (e) {}
+      });
+      this.showToast(`🔄 Hard reloaded player to ${formatTime(timeSec)}`);
+    }
+
+    applyNudge(deltaSec, actorName) {
+      this.currentTime = Math.max(0, this.getEstimatedTime() + deltaSec);
+      this.lastUpdated = Date.now();
+      this.sendUniversalPlayerCommand('seek', this.currentTime);
+      this.showToast(`⏩ Nudged playback ${deltaSec > 0 ? '+' : ''}${deltaSec}s`);
       this.updateUi();
     }
 
@@ -562,13 +789,13 @@
             <div class="ishan-pause-title">MOVIE PAUSED FOR ALL MEMBERS</div>
             <div class="ishan-pause-by" id="ishan-pause-by-text">Paused by ${escapeHtml(actorName || 'Host')}</div>
             <button class="ishan-pause-resume-btn" id="ishan-overlay-resume-btn">
-              <span>▶</span> Resume Movie for Everyone
+              <span>▶</span> Resume Movie for Everyone (3s Countdown)
             </button>
           </div>
         `;
         document.body.appendChild(overlay);
         document.getElementById('ishan-overlay-resume-btn').onclick = () => {
-          this.togglePartyPausePlay();
+          this.startSynchronizedPlay(this.currentTime, this.myName);
         };
       }
       const text = document.getElementById('ishan-pause-by-text');
@@ -628,41 +855,19 @@
         }
       }
 
-      this.updateSyncBadge(drift);
+      this.updateSyncBadge(drift, targetTime);
 
-      if (force || drift > 3.0) {
-        this.resyncPlayer(targetTime);
+      if (force || drift > 4.0) {
+        this.resyncPlayer(targetTime, false);
       }
 
       this.updateUi();
     }
 
-    resyncPlayer(targetTime) {
-      const video = document.querySelector('video');
-      if (video) {
-        try {
-          video.currentTime = targetTime;
-          if (this.isPlaying && video.paused) {
-            video.play().catch(() => {});
-          } else if (!this.isPlaying && !video.paused) {
-            video.pause();
-          }
-        } catch (e) {}
-        return;
-      }
-
-      const iframe = document.querySelector('iframe');
-      if (iframe && iframe.src && iframe.src !== 'about:blank') {
-        try {
-          const currentUrl = new URL(iframe.src);
-          const currentStartAt = Number(currentUrl.searchParams.get('startAt') || 0);
-          if (Math.abs(currentStartAt - targetTime) > 3) {
-            currentUrl.searchParams.set('startAt', Math.floor(targetTime).toString());
-            currentUrl.searchParams.set('autoplay', this.isPlaying ? 'true' : 'false');
-            iframe.src = currentUrl.toString();
-            this.showToast(`🔄 Synced to ${formatTime(targetTime)}`);
-          }
-        } catch (e) {}
+    resyncPlayer(targetTime, allowReload = false) {
+      this.sendUniversalPlayerCommand('seek', targetTime);
+      if (allowReload) {
+        this.hardReloadIframeAtTime(targetTime);
       }
     }
 
@@ -997,6 +1202,12 @@
             <div class="ishan-sync-time" id="ishan-sync-time">00:00</div>
           </div>
 
+          <!-- Live Drift & Offset Tracker -->
+          <div class="ishan-drift-row" id="ishan-drift-row">
+            <span class="ishan-drift-label">Host Time: <b id="ishan-host-time-disp">00:00</b></span>
+            <span class="ishan-drift-offset" id="ishan-drift-offset">±0.0s offset</span>
+          </div>
+
           <!-- Master Party Pause/Play inside Panel -->
           <div style="margin-top: 10px;">
             <button class="ishan-party-pause-btn" id="ishan-panel-pause-btn" style="width: 100%; justify-content: center;">
@@ -1004,14 +1215,23 @@
             </button>
           </div>
 
-          <button class="ishan-resync-btn" id="ishan-resync-btn">
-            <span>⚡</span> Resync to Host Time
+          <!-- Sync to Host with 3s Countdown -->
+          <button class="ishan-resync-btn" id="ishan-resync-btn" title="Sync instantly to Host timestamp with synchronized 3-second countdown">
+            <span>⚡</span> Sync to Host (3s Countdown)
           </button>
-          
+
+          <!-- Micro-adjustment Fine-Tuning Buttons -->
+          <div class="ishan-finetune-row">
+            <button class="ishan-finetune-btn" id="ishan-nudge-back-1" title="Nudge back 1 second">⏪ -1s</button>
+            <button class="ishan-finetune-btn" id="ishan-nudge-fwd-1" title="Nudge forward 1 second">⏩ +1s</button>
+            <button class="ishan-finetune-btn is-hard-sync" id="ishan-hard-sync-btn" title="Force player reload to timestamp if stream drifted">🔄 Hard Sync</button>
+          </div>
+
           <!-- Host Master Controls -->
           <div class="ishan-host-controls" id="ishan-host-controls" style="display: none;">
+            <button class="ishan-host-btn" id="ishan-host-back10">⏪ -10s All</button>
             <button class="ishan-host-btn" id="ishan-host-jump10">⏩ +10s All</button>
-            <button class="ishan-host-btn" id="ishan-host-syncall">🔄 Force Sync All</button>
+            <button class="ishan-host-btn" id="ishan-host-syncall">📡 Sync All (3s)</button>
           </div>
         </div>
 
@@ -1149,21 +1369,41 @@
       };
 
       document.getElementById('ishan-resync-btn').onclick = () => {
-        this.resyncPlayer(this.getEstimatedTime());
-        this.showToast('⚡ Resynced to host time');
+        this.startSynchronizedPlay(this.getEstimatedTime(), this.myName);
+      };
+
+      document.getElementById('ishan-nudge-back-1').onclick = () => {
+        this.applyNudge(-1, this.myName);
+        this.broadcast({ type: 'PARTY_NUDGE_TIME', deltaSec: -1, by: this.myName });
+      };
+
+      document.getElementById('ishan-nudge-fwd-1').onclick = () => {
+        this.applyNudge(1, this.myName);
+        this.broadcast({ type: 'PARTY_NUDGE_TIME', deltaSec: 1, by: this.myName });
+      };
+
+      document.getElementById('ishan-hard-sync-btn').onclick = () => {
+        const time = this.getEstimatedTime();
+        this.hardReloadIframeAtTime(time);
+        this.broadcast({ type: 'PARTY_HARD_SYNC', targetTime: time });
       };
 
       // Host controls
+      document.getElementById('ishan-host-back10').onclick = () => {
+        this.currentTime = Math.max(0, this.currentTime - 10);
+        this.startSynchronizedPlay(this.currentTime, this.myName);
+        this.updateUi();
+      };
+
       document.getElementById('ishan-host-jump10').onclick = () => {
         this.currentTime += 10;
-        this.broadcastPlayback('seek', true);
-        this.resyncPlayer(this.currentTime);
+        this.startSynchronizedPlay(this.currentTime, this.myName);
         this.updateUi();
       };
 
       document.getElementById('ishan-host-syncall').onclick = () => {
-        this.broadcastPlayback('seek', true);
-        this.showToast('📡 Sent force sync to all watchers');
+        this.startSynchronizedPlay(this.getEstimatedTime(), this.myName);
+        this.showToast('📡 Sent synchronized 3s countdown to all watchers');
       };
 
       // Chat input
@@ -1306,10 +1546,34 @@
       }
     }
 
-    updateSyncBadge(drift) {
+    updateSyncBadge(drift, hostTime) {
       const statusEl = document.getElementById('ishan-sync-status');
       const textEl = document.getElementById('ishan-sync-status-text');
+      const hostTimeEl = document.getElementById('ishan-host-time-disp');
+      const offsetEl = document.getElementById('ishan-drift-offset');
+
+      if (hostTimeEl && typeof hostTime === 'number') {
+        hostTimeEl.textContent = formatTime(hostTime);
+      }
+
+      if (offsetEl && typeof drift === 'number') {
+        offsetEl.textContent = `±${drift.toFixed(1)}s offset`;
+        if (drift < 1.0) {
+          offsetEl.className = 'ishan-drift-offset';
+        } else if (drift < 3.0) {
+          offsetEl.className = 'ishan-drift-offset is-warning';
+        } else {
+          offsetEl.className = 'ishan-drift-offset is-danger';
+        }
+      }
+
       if (!statusEl || !textEl) return;
+
+      if (typeof drift !== 'number' || isNaN(drift)) {
+        statusEl.className = 'ishan-sync-status is-synced';
+        textEl.textContent = 'In Sync';
+        return;
+      }
 
       if (drift < 1.0) {
         statusEl.className = 'ishan-sync-status is-synced';

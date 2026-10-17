@@ -838,3 +838,165 @@
   border-color: rgba(255, 255, 255, 0.25);
   transform: translateY(-1px);
 }
+
+/* Synchronized Playback Countdown HUD */
+.ishan-countdown-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ishan-countdown-overlay.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ishan-countdown-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(18, 18, 24, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 36px 48px;
+  border-radius: 28px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 50px rgba(59, 130, 246, 0.25);
+  text-align: center;
+  transform: scale(0.92);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  min-width: 300px;
+}
+
+.ishan-countdown-overlay.is-visible .ishan-countdown-card {
+  transform: scale(1);
+}
+
+.ishan-countdown-badge {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  color: #60a5fa;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.ishan-countdown-number {
+  font-size: 64px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  margin: 10px 0 16px;
+  text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+  animation: ishan-pulse-pop 0.6s ease-out infinite alternate;
+}
+
+@keyframes ishan-pulse-pop {
+  0% { transform: scale(0.96); opacity: 0.9; }
+  100% { transform: scale(1.08); opacity: 1; }
+}
+
+.ishan-countdown-bar-wrap {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.ishan-countdown-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  transition: width 0.15s linear;
+}
+
+.ishan-countdown-subtitle {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Drift & Offset Tracker */
+.ishan-drift-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  font-size: 11.5px;
+}
+
+.ishan-drift-label {
+  color: #a1a1aa;
+}
+
+.ishan-drift-label b {
+  color: #fff;
+  font-family: monospace;
+}
+
+.ishan-drift-offset {
+  font-weight: 700;
+  font-family: monospace;
+  color: #10b981;
+}
+
+.ishan-drift-offset.is-warning {
+  color: #f59e0b;
+}
+
+.ishan-drift-offset.is-danger {
+  color: #ef4444;
+}
+
+/* Micro-adjustment Fine-Tuning Buttons */
+.ishan-finetune-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ishan-finetune-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ishan-finetune-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.ishan-finetune-btn.is-hard-sync {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+}
+
+.ishan-finetune-btn.is-hard-sync:hover {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: rgba(245, 158, 11, 0.5);
+}
