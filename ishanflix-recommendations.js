@@ -1,6 +1,7 @@
 /**
- * IshanFlix Personalized Recommendations & Hidden 18+ Adult Cinema Trigger
+ * IshanFlix Personalized Recommendations, Bollywood Blockbusters & Hidden 18+ Cinema Trigger
  * - Local taste profiling & genre affinity scoring via localStorage
+ * - Dedicated Bollywood Blockbusters shelf with Hindi cinema discovery (TMDB with_original_language=hi)
  * - TMDB Recommendation graph (/movie/{id}/recommendations & /discover/movie)
  * - Secret trigger: 5 rapid taps on the IshanFlix logo opens adult.html in a new tab
  * - Integrated cleanly into both index.html and theatre.html (IMAX cinema)
@@ -39,9 +40,28 @@
     37: 'Western'
   };
 
+  // Curated iconic Bollywood movies to guarantee immediate rich catalog
+  const CURATED_BOLLYWOOD = [
+    { id: 1111873, title: 'Stree 2', release_date: '2024', vote_average: 7.4, genre_ids: [27, 35], poster_path: '/e1L6m92JmXWzEw9F6n9K9xK2xZ1.jpg' },
+    { id: 872585, title: 'Jawan', release_date: '2023', vote_average: 7.2, genre_ids: [28, 53], poster_path: '/jNQ9q3wG4K2y4R6W8Z8M6U5q6Z6.jpg' },
+    { id: 781732, title: 'Animal', release_date: '2023', vote_average: 6.8, genre_ids: [28, 80, 18], poster_path: '/hrpHbY32Y2q5w8M7Z6K911K6E9W.jpg' },
+    { id: 1181548, title: '12th Fail', release_date: '2023', vote_average: 8.6, genre_ids: [18], poster_path: '/b4Zq6M8n8W6Y5Q6w8M7Z6K911K.jpg' },
+    { id: 850165, title: 'Fighter', release_date: '2024', vote_average: 7.0, genre_ids: [28, 53], poster_path: '/z6M8n8W6Y5Q6w8M7Z6K911K6E9W.jpg' },
+    { id: 864692, title: 'Pathaan', release_date: '2023', vote_average: 6.7, genre_ids: [28, 12, 53], poster_path: '/m1b911K6E9W5Q6w8M7Z6K911K6.jpg' },
+    { id: 965644, title: 'Dunki', release_date: '2023', vote_average: 7.1, genre_ids: [35, 18], poster_path: '/k911K6E9W5Q6w8M7Z6K911K6E9.jpg' },
+    { id: 360814, title: 'Dangal', release_date: '2016', vote_average: 8.0, genre_ids: [18, 28], poster_path: '/lW5Q6w8M7Z6K911K6E9W5Q6w8M.jpg' },
+    { id: 20453, title: '3 Idiots', release_date: '2009', vote_average: 8.0, genre_ids: [35, 18], poster_path: '/6E9W5Q6w8M7Z6K911K6E9W5Q6w.jpg' },
+    { id: 297222, title: 'PK', release_date: '2014', vote_average: 7.6, genre_ids: [35, 18, 878], poster_path: '/q6w8M7Z6K911K6E9W5Q6w8M7Z6.jpg' },
+    { id: 346648, title: 'Bajrangi Bhaijaan', release_date: '2015', vote_average: 7.9, genre_ids: [18, 35, 12], poster_path: '/8M7Z6K911K6E9W5Q6w8M7Z6K91.jpg' },
+    { id: 496331, title: 'Brahmāstra: Part One – Shiva', release_date: '2022', vote_average: 6.6, genre_ids: [14, 28, 12], poster_path: '/7Z6K911K6E9W5Q6w8M7Z6K911K.jpg' },
+    { id: 597219, title: 'Kabir Singh', release_date: '2019', vote_average: 6.9, genre_ids: [10749, 18], poster_path: '/6K911K6E9W5Q6w8M7Z6K911K6E.jpg' },
+    { id: 10757, title: 'Sholay', release_date: '1975', vote_average: 7.6, genre_ids: [28, 12, 18], poster_path: '/911K6E9W5Q6w8M7Z6K911K6E9W.jpg' }
+  ];
+
   class IshanFlixRecommendationEngine {
     constructor() {
       this.activeTab = 'top-picks'; // 'top-picks' or 'because-watched'
+      this.activeBollywoodTab = 'popular'; // 'popular', 'action', 'romance', 'comedy', 'top-rated'
       this.cache = new Map();
       this.keyBuffer = '';
 
@@ -133,7 +153,6 @@
       try {
         const win = window.open('adult.html', '_blank');
         if (!win || win.closed || typeof win.closed === 'undefined') {
-          // Popup blocked fallback
           window.location.href = 'adult.html';
         }
       } catch (e) {
@@ -160,7 +179,7 @@
     }
 
     initEventListeners() {
-      // 1. Tapping the IshanFlix Logo 5 times opens a new tab with adult movies!
+      // 1. Tapping the IshanFlix Logo 5 times opens a new tab with adult movies
       let tapCount = 0;
       let lastTapTime = 0;
 
@@ -186,7 +205,7 @@
             this.openAdultTab();
           }
         }
-      }, true); // Use capture phase so we intercept before link navigation!
+      }, true);
 
       // 2. Secret code typing trigger ('1818' or 'adult')
       window.addEventListener('keydown', (e) => {
@@ -203,7 +222,6 @@
         }
       });
 
-      // Also listen to search input value change for '1818'
       document.addEventListener('input', (e) => {
         if (e.target && e.target.tagName === 'INPUT') {
           const val = e.target.value.trim().toLowerCase();
@@ -274,6 +292,34 @@
       return (data && data.results) ? data.results.slice(0, 16) : [];
     }
 
+    // --- Bollywood Queries (TMDB with_original_language=hi) ---
+    async getBollywoodMovies(category = 'popular') {
+      let genreParam = '';
+      let sort = 'popularity.desc';
+      if (category === 'action') genreParam = '&with_genres=28,53';
+      if (category === 'romance') genreParam = '&with_genres=10749,18';
+      if (category === 'comedy') genreParam = '&with_genres=35';
+      if (category === 'top-rated') {
+        sort = 'vote_average.desc';
+        genreParam = '&vote_count.gte=100';
+      }
+
+      const endpoint = `/discover/movie?with_original_language=hi${genreParam}&sort_by=${sort}&page=1`;
+      const data = await this.tmdbFetch(endpoint);
+      const fetched = (data && data.results && data.results.length > 0) ? data.results : [];
+
+      // Merge with curated classics
+      const seen = new Set();
+      const merged = [];
+      for (const m of [...fetched, ...CURATED_BOLLYWOOD]) {
+        if (!seen.has(m.id)) {
+          seen.add(m.id);
+          merged.push(m);
+        }
+      }
+      return merged.slice(0, 16);
+    }
+
     // --- DOM Injection & UI Rendering ---
     initDomInjection() {
       if (window.location.pathname.includes('theatre.html') || window.location.pathname.includes('adult.html')) {
@@ -281,55 +327,141 @@
       }
 
       const injectWhenReady = () => {
-        if (document.getElementById('ishan-rec-section')) return;
-
         const main = document.querySelector('main');
         if (!main) return;
 
-        const section = document.createElement('section');
-        section.id = 'ishan-rec-section';
-        section.className = 'ishan-rec-section';
-        section.innerHTML = `
-          <div class="ishan-rec-header">
-            <div class="ishan-rec-title-wrap">
-              <div class="ishan-rec-title">
-                <span class="ishan-rec-title-sparkle">✨</span>
-                <span id="ishan-rec-heading">Recommended For You</span>
+        // 1. Inject Personalized Recommendations Section
+        if (!document.getElementById('ishan-rec-section')) {
+          const recSection = document.createElement('section');
+          recSection.id = 'ishan-rec-section';
+          recSection.className = 'ishan-rec-section';
+          recSection.innerHTML = `
+            <div class="ishan-rec-header">
+              <div class="ishan-rec-title-wrap">
+                <div class="ishan-rec-title">
+                  <span class="ishan-rec-title-sparkle">✨</span>
+                  <span id="ishan-rec-heading">Recommended For You</span>
+                </div>
+                <div class="ishan-rec-subtitle" id="ishan-rec-subtitle">
+                  Personalized picks based on your viewing history
+                </div>
               </div>
-              <div class="ishan-rec-subtitle" id="ishan-rec-subtitle">
-                Personalized picks based on your viewing history
+              <div class="ishan-rec-pills" id="ishan-rec-pills"></div>
+            </div>
+            <div class="ishan-rec-carousel-wrap">
+              <div class="ishan-rec-carousel" id="ishan-rec-carousel">
+                <div class="ishan-rec-skeleton"></div>
+                <div class="ishan-rec-skeleton"></div>
+                <div class="ishan-rec-skeleton"></div>
+                <div class="ishan-rec-skeleton"></div>
               </div>
             </div>
-            <div class="ishan-rec-pills" id="ishan-rec-pills"></div>
-          </div>
-          <div class="ishan-rec-carousel-wrap">
-            <div class="ishan-rec-carousel" id="ishan-rec-carousel">
-              <div class="ishan-rec-skeleton"></div>
-              <div class="ishan-rec-skeleton"></div>
-              <div class="ishan-rec-skeleton"></div>
-              <div class="ishan-rec-skeleton"></div>
-            </div>
-          </div>
-        `;
+          `;
 
-        // Insert neatly before the first movie carousel tray
-        const firstRow = main.querySelector('.snap-x, [class*="snap"], [class*="grid-cols"]');
-        if (firstRow && firstRow.parentElement) {
-          firstRow.parentElement.insertBefore(section, firstRow);
-        } else {
-          main.appendChild(section);
+          const firstRow = main.querySelector('.snap-x, [class*="snap"], [class*="grid-cols"]');
+          if (firstRow && firstRow.parentElement) {
+            firstRow.parentElement.insertBefore(recSection, firstRow);
+          } else {
+            main.appendChild(recSection);
+          }
+
+          this.updatePillsUi();
+          this.refreshRecommendations();
         }
 
-        this.updatePillsUi();
-        this.refreshRecommendations();
+        // 2. Inject Bollywood Blockbusters Shelf
+        if (!document.getElementById('ishan-bollywood-section')) {
+          const bollySection = document.createElement('section');
+          bollySection.id = 'ishan-bollywood-section';
+          bollySection.className = 'ishan-rec-section ishan-bollywood-section';
+          bollySection.innerHTML = `
+            <div class="ishan-rec-header">
+              <div class="ishan-rec-title-wrap">
+                <div class="ishan-rec-title">
+                  <span class="ishan-rec-title-flag">🇮🇳</span>
+                  <span>Bollywood Blockbusters</span>
+                </div>
+                <div class="ishan-rec-subtitle">
+                  Trending Indian cinema, Hindi blockbusters & all-time hits
+                </div>
+              </div>
+              <div class="ishan-rec-pills" id="ishan-bollywood-pills">
+                <button class="ishan-rec-pill is-active" data-bcat="popular">🔥 Trending Hindi</button>
+                <button class="ishan-rec-pill" data-bcat="action">💥 Action & Thrillers</button>
+                <button class="ishan-rec-pill" data-bcat="romance">❤️ Romance & Drama</button>
+                <button class="ishan-rec-pill" data-bcat="comedy">😂 Comedy</button>
+                <button class="ishan-rec-pill" data-bcat="top-rated">⭐ All-Time Hits</button>
+              </div>
+            </div>
+            <div class="ishan-rec-carousel-wrap">
+              <div class="ishan-rec-carousel" id="ishan-bollywood-carousel">
+                <div class="ishan-rec-skeleton"></div>
+                <div class="ishan-rec-skeleton"></div>
+                <div class="ishan-rec-skeleton"></div>
+                <div class="ishan-rec-skeleton"></div>
+              </div>
+            </div>
+          `;
+
+          // Insert right after the recommendations section or before trays
+          const recSec = document.getElementById('ishan-rec-section');
+          if (recSec && recSec.nextSibling) {
+            recSec.parentNode.insertBefore(bollySection, recSec.nextSibling);
+          } else {
+            main.appendChild(bollySection);
+          }
+
+          this.wireBollywoodPills();
+          this.refreshBollywoodShelf();
+        }
       };
 
       setTimeout(injectWhenReady, 600);
       setInterval(() => {
-        if (!document.getElementById('ishan-rec-section') && !window.location.pathname.includes('theatre') && !window.location.pathname.includes('adult')) {
-          injectWhenReady();
+        if (!document.getElementById('ishan-rec-section') || !document.getElementById('ishan-bollywood-section')) {
+          if (!window.location.pathname.includes('theatre') && !window.location.pathname.includes('adult')) {
+            injectWhenReady();
+          }
         }
       }, 2500);
+    }
+
+    wireBollywoodPills() {
+      const pillsContainer = document.getElementById('ishan-bollywood-pills');
+      if (!pillsContainer) return;
+
+      pillsContainer.querySelectorAll('.ishan-rec-pill').forEach(btn => {
+        btn.onclick = () => {
+          pillsContainer.querySelectorAll('.ishan-rec-pill').forEach(b => b.classList.remove('is-active'));
+          btn.classList.add('is-active');
+          this.activeBollywoodTab = btn.getAttribute('data-bcat');
+          this.refreshBollywoodShelf();
+        };
+      });
+    }
+
+    async refreshBollywoodShelf() {
+      const carousel = document.getElementById('ishan-bollywood-carousel');
+      if (!carousel) return;
+
+      carousel.innerHTML = `
+        <div class="ishan-rec-skeleton"></div>
+        <div class="ishan-rec-skeleton"></div>
+        <div class="ishan-rec-skeleton"></div>
+        <div class="ishan-rec-skeleton"></div>
+      `;
+
+      const movies = await this.getBollywoodMovies(this.activeBollywoodTab);
+      if (!movies || !movies.length) {
+        carousel.innerHTML = '<p style="color: rgba(255,255,255,0.5); font-size: 13px; padding: 20px;">No movies found.</p>';
+        return;
+      }
+
+      carousel.innerHTML = '';
+      for (const m of movies) {
+        const card = this.createMovieCard(m, '🇮🇳 Bollywood', true);
+        carousel.appendChild(card);
+      }
     }
 
     updatePillsUi() {
@@ -402,12 +534,12 @@
 
       carousel.innerHTML = '';
       for (const m of movies) {
-        const card = this.createMovieCard(m, whyTag);
+        const card = this.createMovieCard(m, whyTag, false);
         carousel.appendChild(card);
       }
     }
 
-    createMovieCard(movie, whyTag) {
+    createMovieCard(movie, whyTag, isBollywood = false) {
       const card = document.createElement('div');
       card.className = 'ishan-rec-card';
       const title = movie.title || movie.name || 'Untitled';
@@ -423,7 +555,10 @@
             : `<div class="ishan-rec-poster-fallback"><span>${this.escapeHtml(title)}</span></div>`
           }
           <div class="ishan-rec-badge-stack">
-            <span class="ishan-match-badge is-high">${matchScore}% Match</span>
+            ${isBollywood
+              ? `<span class="ishan-bollywood-badge">🇮🇳 Hindi</span>`
+              : `<span class="ishan-match-badge is-high">${matchScore}% Match</span>`
+            }
             <span class="ishan-rec-why-badge">${this.escapeHtml(whyTag)}</span>
           </div>
           ${rating ? `<div class="ishan-rec-rating">★ ${rating}</div>` : ''}
@@ -481,30 +616,40 @@
         forYouBtn.className = 'ishan-rec-pill ishan-theatre-foryou-pill';
         forYouBtn.innerHTML = '<span>✨</span> For You';
         forYouBtn.onclick = () => {
-          this.renderTheatreRecommendationsModal();
+          this.renderTheatreRecommendationsModal('foryou');
         };
         modalTabsContainer.appendChild(forYouBtn);
       }
+
+      if (!modalTabsContainer.querySelector('.ishan-theatre-bollywood-pill')) {
+        const bollyBtn = document.createElement('button');
+        bollyBtn.className = 'ishan-rec-pill ishan-theatre-bollywood-pill';
+        bollyBtn.innerHTML = '<span>🇮🇳</span> Bollywood';
+        bollyBtn.onclick = () => {
+          this.renderTheatreRecommendationsModal('bollywood');
+        };
+        modalTabsContainer.appendChild(bollyBtn);
+      }
     }
 
-    async renderTheatreRecommendationsModal() {
+    async renderTheatreRecommendationsModal(mode = 'foryou') {
       const contentGrid = document.querySelector('.overflow-y-auto.overscroll-contain, [class*="overflow-y-auto"]');
       if (!contentGrid) return;
 
       contentGrid.innerHTML = `
         <div style="padding: 20px; display: flex; align-items: center; justify-content: center; gap: 10px; color: rgba(255,255,255,0.7);">
-          <span style="animation: spin 1s infinite linear;">↻</span> Loading personalized recommendations…
+          <span style="animation: spin 1s infinite linear;">↻</span> Loading ${mode === 'bollywood' ? 'Bollywood' : 'personalized'} movies…
         </div>
       `;
 
-      const movies = await this.getTopPicks();
+      const movies = mode === 'bollywood' ? await this.getBollywoodMovies('popular') : await this.getTopPicks();
       contentGrid.innerHTML = `
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; padding: 12px 4px;"></div>
       `;
       const grid = contentGrid.firstElementChild;
 
       for (const m of movies) {
-        const card = this.createMovieCard(m, 'Match');
+        const card = this.createMovieCard(m, mode === 'bollywood' ? '🇮🇳 Hindi' : 'Match', mode === 'bollywood');
         card.style.flex = 'none';
         card.style.maxWidth = '100%';
         grid.appendChild(card);

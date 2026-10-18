@@ -426,3 +426,28 @@
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* --- Bollywood Shelf Custom Styling --- */
+.ishan-bollywood-section {
+  margin-top: 10px;
+}
+
+.ishan-rec-title-flag {
+  font-size: 22px;
+}
+
+.ishan-bollywood-badge {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.4);
+}
+
+.ishan-rec-card:hover .ishan-bollywood-badge {
+  box-shadow: 0 2px 12px rgba(249, 115, 22, 0.6);
+}
+
