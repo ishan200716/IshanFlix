@@ -119,6 +119,13 @@
       this.lastUpdated = Date.now();
       this.currentMedia = null;
 
+      // Prevents echo loops when party pause/play triggers iframe events
+      this._suppressPlayerEvents = false;
+      this._suppressTimer = null;
+
+      // Seek bar dragging state
+      this._seekDragging = false;
+
       // 3D Remote Avatars inside theatre.html
       this.remoteAvatars = new Map(); // userId -> { char, nametag, targetPos, targetYaw, currentPos, currentYaw, sitBlend, walkPhase }
       this.lastPosBroadcast = 0;
@@ -127,6 +134,7 @@
       this.broadcastChannel = null;
       this.peer = null;
       this.peerConnections = new Map(); // peerId -> DataConnection
+      this.peerToUserId = new Map(); // peerId -> userId
 
       this.initBroadcastChannel();
       this.initDom();
@@ -134,6 +142,7 @@
       this.initTheatreAvatarLoop();
       this.checkUrlForRoom();
       this.startHeartbeat();
+      this.startSeekBarUpdater();
     }
 
     // --- Communication Layer 1: BroadcastChannel (Local Tabs / Windows) ---
@@ -155,6 +164,11 @@
       if (typeof window.Peer === 'undefined') {
         console.warn('PeerJS library not loaded, relying on BroadcastChannel');
         return;
+      }
+
+      if (this.peer) {
+        try { this.peer.destroy(); } catch (e) {}
+        this.peer = null;
       }
 
       try {
@@ -186,9 +200,15 @@
 
         this.peer.on('error', (err) => {
           console.warn('[IshanFlix] PeerJS error:', err);
-          if (err.type === 'unavailable-id' && isHostMode) {
-            const fallbackId = `ishan-${cleanRoom}-${Math.random().toString(36).slice(2, 6)}`;
-            this.peer = new window.Peer(fallbackId);
+          if (err.type === 'peer-unavailable' && !isHostMode) {
+            console.warn('[IshanFlix] Host peer not found yet, retrying in 2 seconds...');
+            setTimeout(() => {
+              if (this.roomId && !this.isHost && this.peer && !this.peer.destroyed) {
+                const hostPeerId = `ishan-${cleanRoom}`;
+                const conn = this.peer.connect(hostPeerId, { reliable: true });
+                this.setupConnection(conn);
+              }
+            }, 2000);
           }
         });
       } catch (err) {
@@ -197,13 +217,22 @@
     }
 
     setupConnection(conn) {
-      conn.on('open', () => {
+      if (!conn) return;
+
+      const handleOpen = () => {
         this.peerConnections.set(conn.peer, conn);
-        // Announce join
-        conn.send({
-          type: 'JOIN_ANNOUNCE',
-          user: { id: this.myId, name: this.myName, color: this.myColor, isHost: this.isHost }
-        });
+
+        // Always announce self with full credentials and roomId so recipient never drops it
+        try {
+          conn.send({
+            type: 'JOIN_ANNOUNCE',
+            roomId: this.roomId,
+            senderId: this.myId,
+            user: { id: this.myId, name: this.myName, color: this.myColor, isHost: this.isHost }
+          });
+        } catch (e) {
+          console.warn('[IshanFlix] Error sending JOIN_ANNOUNCE:', e);
+        }
 
         // If I am host, send initial room state to new peer
         if (this.isHost) {
@@ -219,31 +248,76 @@
               isPlaying: this.isPlaying
             };
           }
-          conn.send({
-            type: 'ROOM_STATE_FULL',
-            roomId: this.roomId,
-            hostId: this.myId,
-            hostName: this.myName,
-            theatreMedia: theatreMedia,
-            media: this.currentMedia || this.detectCurrentPageMedia(),
-            playback: {
-              isPlaying: this.isPlaying,
-              currentTime: this.getEstimatedTime(),
-              duration: this.duration,
-              updatedAt: Date.now()
-            },
-            participants: Array.from(this.participants.values()),
-            chat: this.chatMessages.slice(-30)
-          });
+          try {
+            conn.send({
+              type: 'ROOM_STATE_FULL',
+              roomId: this.roomId,
+              senderId: this.myId,
+              hostId: this.myId,
+              hostName: this.myName,
+              theatreMedia: theatreMedia,
+              media: this.currentMedia || this.detectCurrentPageMedia(),
+              playback: {
+                isPlaying: this.isPlaying,
+                currentTime: this.getEstimatedTime(),
+                duration: this.duration,
+                updatedAt: Date.now()
+              },
+              participants: Array.from(this.participants.values()),
+              chat: this.chatMessages.slice(-30)
+            });
+          } catch (e) {
+            console.warn('[IshanFlix] Error sending ROOM_STATE_FULL:', e);
+          }
         }
-      });
+      };
+
+      if (conn.open) {
+        handleOpen();
+      } else {
+        conn.on('open', handleOpen);
+      }
 
       conn.on('data', (data) => {
-        this.handleIncomingMessage(data);
+        if (!data) return;
+        // Auto-fill roomId and senderId if omitted over direct peer connection
+        if (typeof data === 'object') {
+          if (!data.roomId) data.roomId = this.roomId;
+          if (!data.senderId && conn.peer) data.senderId = conn.peer;
+          if (data.user && data.user.id) {
+            this.peerToUserId.set(conn.peer, data.user.id);
+          }
+        }
+        this.handleIncomingMessage(data, conn.peer);
       });
 
       conn.on('close', () => {
         this.peerConnections.delete(conn.peer);
+        const userId = this.peerToUserId.get(conn.peer);
+        if (userId) {
+          this.peerToUserId.delete(conn.peer);
+          if (this.participants.has(userId)) {
+            const user = this.participants.get(userId);
+            this.participants.delete(userId);
+            this.removeRemoteAvatar(userId);
+            this.addSystemMessage(`${user.name || 'A user'} left the watch party.`);
+            this.updateUi();
+            if (this.isHost) {
+              this.broadcast({
+                type: 'LEAVE_ANNOUNCE',
+                userId: userId
+              });
+              this.broadcast({
+                type: 'PARTICIPANTS_UPDATE',
+                participants: Array.from(this.participants.values())
+              });
+            }
+          }
+        }
+      });
+
+      conn.on('error', (err) => {
+        console.warn('[IshanFlix] Peer connection error:', err);
       });
     }
 
@@ -284,15 +358,64 @@
     }
 
     // --- Message Routing & Handling ---
-    handleIncomingMessage(data) {
-      if (!data || !this.roomId || data.roomId !== this.roomId) return;
+    handleIncomingMessage(data, fromPeerId) {
+      if (!data) return;
+      if (!data.roomId && this.roomId) data.roomId = this.roomId;
+      if (data.roomId !== this.roomId) return;
       if (data.senderId === this.myId) return; // Skip own echoed messages
+
+      // If host, relay message to other connected WebRTC peers in the star network
+      if (this.isHost && fromPeerId && data.type !== 'ROOM_STATE_FULL') {
+        for (const [peerId, conn] of this.peerConnections) {
+          if (conn && conn.open && peerId !== fromPeerId) {
+            try { conn.send(data); } catch (e) {}
+          }
+        }
+      }
 
       switch (data.type) {
         case 'JOIN_ANNOUNCE': {
-          this.participants.set(data.user.id, data.user);
-          this.addSystemMessage(`${data.user.name} joined the watch party! 🎉`);
+          if (!data.user || !data.user.id) break;
+          const isNew = !this.participants.has(data.user.id);
+          this.participants.set(data.user.id, {
+            ...data.user,
+            lastSeen: Date.now()
+          });
+          if (fromPeerId) {
+            this.peerToUserId.set(fromPeerId, data.user.id);
+          }
+          if (isNew) {
+            this.addSystemMessage(`${data.user.name} joined the watch party! 🎉`);
+            this.showToast(`👋 ${data.user.name} joined!`);
+          }
           this.updateUi();
+
+          // If I am host, broadcast the updated participant list to all connected peers
+          if (this.isHost) {
+            this.broadcast({
+              type: 'PARTICIPANTS_UPDATE',
+              participants: Array.from(this.participants.values())
+            });
+          }
+          break;
+        }
+
+        case 'PARTICIPANTS_UPDATE': {
+          if (Array.isArray(data.participants)) {
+            let changed = false;
+            for (const p of data.participants) {
+              if (p && p.id) {
+                if (!this.participants.has(p.id)) changed = true;
+                this.participants.set(p.id, {
+                  ...p,
+                  lastSeen: Date.now()
+                });
+              }
+            }
+            if (changed || this.participants.size !== data.participants.length) {
+              this.updateUi();
+            }
+          }
           break;
         }
 
@@ -303,6 +426,12 @@
             this.removeRemoteAvatar(data.userId);
             this.addSystemMessage(`${name} left the room.`);
             this.updateUi();
+            if (this.isHost) {
+              this.broadcast({
+                type: 'PARTICIPANTS_UPDATE',
+                participants: Array.from(this.participants.values())
+              });
+            }
           }
           break;
         }
@@ -376,6 +505,11 @@
           break;
         }
 
+        case 'PARTY_SEEK_COMMAND': {
+          this.applyPartySeek(data.targetTime, data.seekedBy);
+          break;
+        }
+
         case 'THEATRE_PLAY_MEDIA': {
           this.addSystemMessage(`🎬 ${data.startedBy || 'Host'} started playing "${data.media?.title || 'movie'}" on the IMAX screen!`);
           this.showToast(`🎬 Now Playing: ${data.media?.title || 'Movie'}`);
@@ -425,6 +559,21 @@
         case 'HEARTBEAT': {
           if (data.senderId === this.hostId) {
             this.applyPlaybackSync(data.playback, false);
+            if (Array.isArray(data.participants)) {
+              let changed = false;
+              for (const p of data.participants) {
+                if (p && p.id) {
+                  if (!this.participants.has(p.id)) changed = true;
+                  this.participants.set(p.id, {
+                    ...p,
+                    lastSeen: Date.now()
+                  });
+                }
+              }
+              if (changed || this.participants.size !== data.participants.length) {
+                this.updateUi();
+              }
+            }
           }
           break;
         }
@@ -565,6 +714,15 @@
       }
     }
 
+    // --- Suppress echo loop helper ---
+    _beginSuppress() {
+      this._suppressPlayerEvents = true;
+      clearTimeout(this._suppressTimer);
+      this._suppressTimer = setTimeout(() => {
+        this._suppressPlayerEvents = false;
+      }, 1500);
+    }
+
     // --- Master Party Pause / Play & Synchronized Countdown System ---
     togglePartyPausePlay() {
       if (!this.roomId) {
@@ -607,6 +765,7 @@
     executeCountdown(scheduledStart, targetTime, actorName) {
       if (typeof targetTime === 'number') {
         this.currentTime = targetTime;
+        this._beginSuppress();
         this.sendUniversalPlayerCommand('seek', targetTime);
       }
 
@@ -676,7 +835,11 @@
       if (typeof time === 'number') this.currentTime = time;
       this.lastUpdated = Date.now();
 
+      this._beginSuppress();
       this.sendUniversalPlayerCommand('pause');
+      // Retry pause after a short delay (some embeds ignore first postMessage)
+      setTimeout(() => this.sendUniversalPlayerCommand('pause'), 300);
+      setTimeout(() => this.sendUniversalPlayerCommand('pause'), 800);
 
       this.showPauseOverlay(actorName);
       this.updatePauseButtons(false);
@@ -690,13 +853,48 @@
       if (typeof time === 'number') this.currentTime = time;
       this.lastUpdated = Date.now();
 
+      this._beginSuppress();
       this.sendUniversalPlayerCommand('play');
+      // Retry play after a short delay
+      setTimeout(() => this.sendUniversalPlayerCommand('play'), 300);
 
       this.hidePauseOverlay();
       this.updatePauseButtons(true);
       this.addSystemMessage(`▶ Movie resumed for party by ${actorName}`);
       this.showToast(`▶ Movie resumed by ${actorName}`);
       this.updateUi();
+    }
+
+    // --- Party Seek / Skip Feature ---
+    seekPartyTo(targetTime, initiatorName) {
+      if (!this.roomId) return;
+      const clampedTime = Math.max(0, targetTime);
+      this.broadcast({
+        type: 'PARTY_SEEK_COMMAND',
+        targetTime: clampedTime,
+        seekedBy: initiatorName || this.myName
+      });
+      this.applyPartySeek(clampedTime, initiatorName || this.myName);
+    }
+
+    applyPartySeek(targetTime, actorName) {
+      this.currentTime = Math.max(0, targetTime);
+      this.lastUpdated = Date.now();
+
+      this._beginSuppress();
+      this.sendUniversalPlayerCommand('seek', this.currentTime);
+      // Retry seek for embeds that may not respond instantly
+      setTimeout(() => this.sendUniversalPlayerCommand('seek', this.currentTime), 400);
+
+      this.addSystemMessage(`⏩ ${actorName} jumped to ${formatTime(this.currentTime)}`);
+      this.showToast(`⏩ Jumped to ${formatTime(this.currentTime)}`);
+      this.updateUi();
+    }
+
+    skipParty(deltaSec) {
+      if (!this.roomId) return;
+      const targetTime = Math.max(0, this.getEstimatedTime() + deltaSec);
+      this.seekPartyTo(targetTime, this.myName);
     }
 
     sendUniversalPlayerCommand(cmd, value) {
@@ -897,6 +1095,9 @@
 
     initPlayerListeners() {
       window.addEventListener('message', (event) => {
+        // Guard: skip iframe events while party commands are executing
+        if (this._suppressPlayerEvents) return;
+
         if (event.data && event.data.type === 'PLAYER_EVENT') {
           const { event: evt, currentTime, duration } = event.data.data || {};
           if (typeof currentTime === 'number') {
@@ -917,6 +1118,40 @@
           }
         }
       });
+
+      // Also detect duration from native <video> elements for seek bar
+      this._videoDurationPoller = setInterval(() => {
+        const videos = document.querySelectorAll('video');
+        videos.forEach((v) => {
+          if (v.duration && !isNaN(v.duration) && v.duration > 0) {
+            this.duration = v.duration;
+            if (!this._suppressPlayerEvents) {
+              this.currentTime = v.currentTime;
+              this.lastUpdated = Date.now();
+            }
+          }
+        });
+      }, 2000);
+    }
+
+    startSeekBarUpdater() {
+      setInterval(() => {
+        if (!this.roomId || this._seekDragging) return;
+        const seekFill = document.getElementById('ishan-seek-fill');
+        const seekTimeDisp = document.getElementById('ishan-seek-time-disp');
+        const seekDurDisp = document.getElementById('ishan-seek-dur-disp');
+
+        if (seekFill && this.duration > 0) {
+          const pct = Math.min(100, Math.max(0, (this.getEstimatedTime() / this.duration) * 100));
+          seekFill.style.width = `${pct}%`;
+        }
+        if (seekTimeDisp) {
+          seekTimeDisp.textContent = formatTime(this.getEstimatedTime());
+        }
+        if (seekDurDisp) {
+          seekDurDisp.textContent = formatTime(this.duration);
+        }
+      }, 500);
     }
 
     broadcastPlayback(action, force = false) {
@@ -944,7 +1179,8 @@
               currentTime: this.getEstimatedTime(),
               duration: this.duration,
               updatedAt: Date.now()
-            }
+            },
+            participants: Array.from(this.participants.values())
           });
         }
       }, 2000);
@@ -960,6 +1196,8 @@
       this.currentMedia = this.detectCurrentPageMedia();
 
       this.participants.clear();
+      this.peerConnections.clear();
+      this.peerToUserId.clear();
       this.participants.set(this.myId, {
         id: this.myId,
         name: this.myName,
@@ -982,6 +1220,8 @@
       this.roomId = cleanCode;
       this.isHost = false;
       this.participants.clear();
+      this.peerConnections.clear();
+      this.peerToUserId.clear();
       this.participants.set(this.myId, {
         id: this.myId,
         name: this.myName,
@@ -1020,6 +1260,7 @@
         this.peer = null;
       }
       this.peerConnections.clear();
+      this.peerToUserId.clear();
 
       this.roomId = null;
       this.isHost = false;
@@ -1208,6 +1449,42 @@
             <span class="ishan-drift-offset" id="ishan-drift-offset">±0.0s offset</span>
           </div>
 
+          <!-- Party Seek Bar -->
+          <div class="ishan-seek-section">
+            <div class="ishan-seek-bar-wrap" id="ishan-seek-bar-wrap" title="Click or drag to jump to a position">
+              <div class="ishan-seek-fill" id="ishan-seek-fill"></div>
+              <div class="ishan-seek-thumb" id="ishan-seek-thumb"></div>
+            </div>
+            <div class="ishan-seek-time-row">
+              <span class="ishan-seek-time" id="ishan-seek-time-disp">00:00</span>
+              <span class="ishan-seek-time" id="ishan-seek-dur-disp">00:00</span>
+            </div>
+          </div>
+
+          <!-- Skip ±30s Buttons for everyone -->
+          <div class="ishan-skip-row">
+            <button class="ishan-skip-btn" id="ishan-skip-back-30" title="Skip back 30 seconds for everyone">
+              <span>⏪</span> -30s
+            </button>
+            <button class="ishan-skip-btn" id="ishan-skip-back-10" title="Skip back 10 seconds for everyone">
+              <span>⏪</span> -10s
+            </button>
+            <button class="ishan-skip-fwd-btn" id="ishan-skip-fwd-10" title="Skip forward 10 seconds for everyone">
+              +10s <span>⏩</span>
+            </button>
+            <button class="ishan-skip-fwd-btn" id="ishan-skip-fwd-30" title="Skip forward 30 seconds for everyone">
+              +30s <span>⏩</span>
+            </button>
+          </div>
+
+          <!-- Jump to Time Input -->
+          <div class="ishan-jump-row">
+            <input type="text" class="ishan-jump-input" id="ishan-jump-input" placeholder="e.g. 1:23:45" title="Type a timestamp to jump to" />
+            <button class="ishan-jump-btn" id="ishan-jump-btn" title="Jump all party members to this timestamp">
+              🎯 Jump
+            </button>
+          </div>
+
           <!-- Master Party Pause/Play inside Panel -->
           <div style="margin-top: 10px;">
             <button class="ishan-party-pause-btn" id="ishan-panel-pause-btn" style="width: 100%; justify-content: center;">
@@ -1388,6 +1665,35 @@
         this.broadcast({ type: 'PARTY_HARD_SYNC', targetTime: time });
       };
 
+      // --- Seek Bar (click and drag) ---
+      this.wireSeekBar();
+
+      // --- Skip ±30s / ±10s Buttons ---
+      document.getElementById('ishan-skip-back-30').onclick = () => this.skipParty(-30);
+      document.getElementById('ishan-skip-back-10').onclick = () => this.skipParty(-10);
+      document.getElementById('ishan-skip-fwd-10').onclick = () => this.skipParty(10);
+      document.getElementById('ishan-skip-fwd-30').onclick = () => this.skipParty(30);
+
+      // --- Jump to Time ---
+      document.getElementById('ishan-jump-btn').onclick = () => {
+        const input = document.getElementById('ishan-jump-input');
+        if (!input) return;
+        const parsed = this.parseTimeInput(input.value);
+        if (parsed !== null) {
+          this.seekPartyTo(parsed, this.myName);
+          input.value = '';
+        } else {
+          this.showToast('Invalid time format. Use mm:ss or h:mm:ss');
+        }
+      };
+
+      document.getElementById('ishan-jump-input').onkeydown = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          document.getElementById('ishan-jump-btn').click();
+        }
+      };
+
       // Host controls
       document.getElementById('ishan-host-back10').onclick = () => {
         this.currentTime = Math.max(0, this.currentTime - 10);
@@ -1470,6 +1776,65 @@
           this.showToast('Please enter a room code');
         }
       };
+    }
+
+    wireSeekBar() {
+      const wrap = document.getElementById('ishan-seek-bar-wrap');
+      if (!wrap) return;
+
+      const getSeekTime = (clientX) => {
+        const rect = wrap.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        return pct * (this.duration || 1);
+      };
+
+      const updateThumb = (clientX) => {
+        const rect = wrap.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        const fill = document.getElementById('ishan-seek-fill');
+        const thumb = document.getElementById('ishan-seek-thumb');
+        const timeDisp = document.getElementById('ishan-seek-time-disp');
+        if (fill) fill.style.width = `${pct * 100}%`;
+        if (thumb) thumb.style.left = `${pct * 100}%`;
+        if (timeDisp) timeDisp.textContent = formatTime(pct * (this.duration || 0));
+      };
+
+      wrap.addEventListener('pointerdown', (e) => {
+        if (this.duration <= 0) return;
+        e.preventDefault();
+        this._seekDragging = true;
+        wrap.setPointerCapture(e.pointerId);
+        wrap.classList.add('is-dragging');
+        updateThumb(e.clientX);
+      });
+
+      wrap.addEventListener('pointermove', (e) => {
+        if (!this._seekDragging) return;
+        updateThumb(e.clientX);
+      });
+
+      wrap.addEventListener('pointerup', (e) => {
+        if (!this._seekDragging) return;
+        this._seekDragging = false;
+        wrap.classList.remove('is-dragging');
+        const seekTime = getSeekTime(e.clientX);
+        this.seekPartyTo(seekTime, this.myName);
+      });
+
+      wrap.addEventListener('pointercancel', () => {
+        this._seekDragging = false;
+        wrap.classList.remove('is-dragging');
+      });
+    }
+
+    parseTimeInput(str) {
+      if (!str || !str.trim()) return null;
+      const parts = str.trim().split(':').map(Number);
+      if (parts.some(isNaN)) return null;
+      if (parts.length === 1) return parts[0]; // seconds
+      if (parts.length === 2) return parts[0] * 60 + parts[1]; // mm:ss
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]; // h:mm:ss
+      return null;
     }
 
     injectNavbarButton() {
