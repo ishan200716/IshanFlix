@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>IshanFlix 18+ — Mature & Adult Cinema</title>
+    <meta name="description" content="IshanFlix 18+ Adult Cinema. Curated mature and adult movies from the library with high-definition streaming." />
+    <meta name="theme-color" content="#0a0507" />
+    <meta name="color-scheme" content="dark" />
+
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23991b1b'/%3E%3Ctext x='32' y='43' font-family='Arial, sans-serif' font-size='30' font-weight='800' fill='%23ffffff' text-anchor='middle'%3E18+%3C/text%3E%3C/svg%3E"
+    />
+
+    <link rel="preconnect" href="https://api.themoviedb.org" crossorigin />
+    <link rel="preconnect" href="https://image.tmdb.org" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --bg-color: #080507;
+        --card-bg: rgba(26, 14, 20, 0.7);
+        --accent-red: #ef4444;
+        --accent-glow: rgba(239, 68, 68, 0.35);
+        --accent-gold: #fbbf24;
+        --border-color: rgba(255, 255, 255, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background-color: var(--bg-color);
+        background-image: 
+          radial-gradient(ellipse 80% 50% at 50% -20%, rgba(220, 38, 38, 0.22), transparent 70%),
+          linear-gradient(to bottom, #0d060a, #080507);
+        color: #ffffff;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        min-height: 100vh;
+        overflow-x: hidden;
+      }
+
+      /* --- Navigation Header --- */
+      .ishan-adult-header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: rgba(10, 5, 8, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+        padding: 14px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      @media (max-width: 640px) {
+        .ishan-adult-header {
+          padding: 12px 16px;
+        }
+      }
+
+      .ishan-brand-wrap {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+      }
+
+      .ishan-brand-badge {
+        background: linear-gradient(135deg, #ef4444, #991b1b);
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 800;
+        padding: 4px 8px;
+        border-radius: 6px;
+        letter-spacing: 0.05em;
+        box-shadow: 0 0 14px var(--accent-glow);
+      }
+
+      .ishan-brand-title {
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .ishan-brand-sub {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        font-weight: 600;
+      }
+
+      .ishan-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .ishan-btn-exit {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: rgba(255, 255, 255, 0.85);
+        padding: 8px 16px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-decoration: none;
+      }
+
+      .ishan-btn-exit:hover {
+        background: rgba(255, 255, 255, 0.18);
+        color: #ffffff;
+        transform: translateY(-1px);
+      }
+
+      /* --- Search & Hero Banner --- */
+      .ishan-adult-hero {
+        max-width: 1200px;
+        margin: 32px auto 20px;
+        padding: 0 24px;
+        text-align: center;
+      }
+
+      .ishan-hero-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 4px 12px;
+        border-radius: 999px;
+        margin-bottom: 12px;
+      }
+
+      .ishan-hero-title {
+        font-size: clamp(28px, 5vw, 44px);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin-bottom: 8px;
+        background: linear-gradient(to right, #ffffff, #fca5a5);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .ishan-hero-desc {
+        font-size: 15px;
+        color: rgba(255, 255, 255, 0.65);
+        max-width: 580px;
+        margin: 0 auto 24px;
+        line-height: 1.5;
+      }
+
+      .ishan-search-bar {
+        max-width: 540px;
+        margin: 0 auto;
+        position: relative;
+      }
+
+      .ishan-search-input {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 999px;
+        padding: 14px 24px 14px 46px;
+        font-size: 15px;
+        color: #ffffff;
+        outline: none;
+        transition: all 0.25s ease;
+      }
+
+      .ishan-search-input:focus {
+        border-color: var(--accent-red);
+        background: rgba(255, 255, 255, 0.09);
+        box-shadow: 0 0 20px var(--accent-glow);
+      }
+
+      .ishan-search-icon {
+        position: absolute;
+        left: 18px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 16px;
+        color: rgba(255, 255, 255, 0.4);
+      }
+
+      /* --- Category Tabs --- */
+      .ishan-cat-nav {
+        max-width: 1200px;
+        margin: 24px auto 0;
+        padding: 0 24px;
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .ishan-cat-nav::-webkit-scrollbar {
+        display: none;
+      }
+
+      .ishan-cat-btn {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.7);
+        padding: 8px 18px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .ishan-cat-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+
+      .ishan-cat-btn.is-active {
+        background: linear-gradient(135deg, #ef4444, #b91c1c);
+        color: #ffffff;
+        border-color: transparent;
+        box-shadow: 0 4px 16px var(--accent-glow);
+      }
+
+      /* --- Movie Grid --- */
+      .ishan-catalog-section {
+        max-width: 1200px;
+        margin: 28px auto 60px;
+        padding: 0 24px;
+      }
+
+      .ishan-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 20px 16px;
+      }
+
+      @media (max-width: 640px) {
+        .ishan-grid {
+          grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+          gap: 16px 12px;
+        }
+      }
+
+      .ishan-movie-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        cursor: pointer;
+        position: relative;
+      }
+
+      .ishan-movie-card:hover {
+        transform: translateY(-8px) scale(1.02);
+        border-color: rgba(239, 68, 68, 0.6);
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.8), 0 0 24px var(--accent-glow);
+      }
+
+      .ishan-poster-wrap {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 2 / 3;
+        background: #12090e;
+        overflow: hidden;
+      }
+
+      .ishan-poster {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.5s ease;
+      }
+
+      .ishan-movie-card:hover .ishan-poster {
+        transform: scale(1.07);
+      }
+
+      .ishan-badge-adult {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: rgba(220, 38, 38, 0.95);
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 800;
+        padding: 3px 8px;
+        border-radius: 999px;
+        letter-spacing: 0.05em;
+        backdrop-filter: blur(6px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+      }
+
+      .ishan-badge-rating {
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        background: rgba(0, 0, 0, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #fbbf24;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+
+      .ishan-card-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+
+      .ishan-movie-card:hover .ishan-card-overlay {
+        opacity: 1;
+      }
+
+      .ishan-play-circle {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #ef4444, #b91c1c);
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        box-shadow: 0 4px 16px var(--accent-glow);
+        transform: scale(0.9);
+        transition: transform 0.2s ease;
+      }
+
+      .ishan-movie-card:hover .ishan-play-circle {
+        transform: scale(1);
+      }
+
+      .ishan-card-info {
+        padding: 10px 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        background: rgba(18, 10, 14, 0.85);
+        flex-grow: 1;
+        justify-content: space-between;
+      }
+
+      .ishan-card-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.95);
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      .ishan-card-meta {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.45);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 2px;
+      }
+
+      /* --- Modal Player --- */
+      .ishan-player-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background: rgba(0, 0, 0, 0.92);
+        backdrop-filter: blur(20px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .ishan-player-modal.is-open {
+        display: flex;
+      }
+
+      .ishan-player-box {
+        width: 100%;
+        max-width: 960px;
+        background: #0d070b;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9), 0 0 40px var(--accent-glow);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .ishan-player-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .ishan-player-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #ffffff;
+      }
+
+      .ishan-player-close {
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        color: #ffffff;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+      }
+
+      .ishan-player-frame-wrap {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #000000;
+      }
+
+      .ishan-player-frame-wrap iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+      }
+
+      .ishan-player-controls {
+        padding: 12px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        background: rgba(18, 9, 14, 0.8);
+      }
+
+      .ishan-server-select {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        outline: none;
+      }
+
+      .ishan-btn-cinema {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: #000000;
+        font-weight: 700;
+        font-size: 13px;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 999px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Navigation Header -->
+    <header class="ishan-adult-header">
+      <div class="ishan-brand-wrap">
+        <span class="ishan-brand-badge">🔞 18+</span>
+        <div>
+          <div class="ishan-brand-title">IshanFlix</div>
+          <div class="ishan-brand-sub">Adult Cinema</div>
+        </div>
+      </div>
+      <div class="ishan-header-actions">
+        <a href="/" class="ishan-btn-exit" title="Return to standard IshanFlix homepage">
+          <span>🔒</span> Exit to Home
+        </a>
+      </div>
+    </header>
+
+    <!-- Hero & Search -->
+    <section class="ishan-adult-hero">
+      <div class="ishan-hero-tag">🔥 PRIVATE ADULT LIBRARY</div>
+      <h1 class="ishan-hero-title">18+ Mature & Adult Movies</h1>
+      <p class="ishan-hero-desc">
+        Curated erotic thrillers, mature romance, and adult cinema from the library. Watch directly or enter the 3D Virtual IMAX Cinema.
+      </p>
+
+      <div class="ishan-search-bar">
+        <span class="ishan-search-icon">🔍</span>
+        <input
+          type="text"
+          id="ishan-adult-search"
+          class="ishan-search-input"
+          placeholder="Search 18+ movies, erotic thrillers, adult titles…"
+          autocomplete="off"
+        />
+      </div>
+    </section>
+
+    <!-- Category Tabs -->
+    <nav class="ishan-cat-nav" id="ishan-cat-nav">
+      <button class="ishan-cat-btn is-active" data-cat="popular">🔥 All 18+ Popular</button>
+      <button class="ishan-cat-btn" data-cat="thriller">💋 Erotic Thrillers</button>
+      <button class="ishan-cat-btn" data-cat="romance">❤️ Mature Romance</button>
+      <button class="ishan-cat-btn" data-cat="drama">🎭 Drama & Mystery</button>
+      <button class="ishan-cat-btn" data-cat="top-rated">⭐ Top Rated</button>
+    </nav>
+
+    <!-- Movie Catalog -->
+    <main class="ishan-catalog-section">
+      <div class="ishan-grid" id="ishan-movie-grid">
+        <!-- Rendered dynamically -->
+      </div>
+    </main>
+
+    <!-- Player Modal -->
+    <div class="ishan-player-modal" id="ishan-player-modal">
+      <div class="ishan-player-box">
+        <div class="ishan-player-top">
+          <div class="ishan-player-title" id="ishan-player-title">Now Playing</div>
+          <button class="ishan-player-close" id="ishan-player-close">✕</button>
+        </div>
+        <div class="ishan-player-frame-wrap">
+          <iframe id="ishan-player-iframe" src="" allowfullscreen allow="autoplay; fullscreen"></iframe>
+        </div>
+        <div class="ishan-player-controls">
+          <select id="ishan-server-select" class="ishan-server-select">
+            <option value="tgvid">Server 1 (TG Vid)</option>
+            <option value="bingr">Server 2 (Bingr)</option>
+            <option value="nxsha">Server 3 (Nxsha)</option>
+            <option value="vidlink">Server 4 (VidLink)</option>
+          </select>
+          <a href="#" id="ishan-link-theatre" class="ishan-btn-cinema">
+            <span>🎬</span> Watch in 3D IMAX Cinema
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function() {
+        const TMDB_API_KEY = 'fca1c3fa675f74cf4aa8d24b72dd4807';
+        const TMDB_URL = 'https://api.themoviedb.org/3';
+        const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w342';
+
+        const SERVERS = {
+          tgvid: id => `https://tgvid.lovable.app/embed/movie/${id}`,
+          bingr: id => `https://bingr.one/watch/movie/${id}`,
+          nxsha: id => `https://nxsha.space/embed/movie/${id}`,
+          vidlink: id => `https://vidlink.pro/movie/${id}?autoplay=true`
+        };
+
+        let currentCategory = 'popular';
+        let currentMovie = null;
+        let searchDebounce = null;
+
+        // Curated iconic adult and mature movies
+        const CURATED_ADULT = [
+          { id: 664413, title: '365 Days', vote_average: 6.8, release_date: '2020', genre_ids: [10749, 18], poster_path: '/6KIm8L9u6E4eE5N37iR4W6E9W1s.jpg' },
+          { id: 216015, title: 'Fifty Shades of Grey', vote_average: 6.5, release_date: '2015', genre_ids: [10749, 18], poster_path: '/93mMbA11h8CgK8Jp6iM6f99zW6B.jpg' },
+          { id: 341174, title: 'Fifty Shades Darker', vote_average: 6.5, release_date: '2017', genre_ids: [10749, 18], poster_path: '/1AwU3r2r4Q6dF97wW3n1U6B721A.jpg' },
+          { id: 402, title: 'Basic Instinct', vote_average: 7.0, release_date: '1992', genre_ids: [9648, 53], poster_path: '/p244mK8wWd8hU2G3q2gGZ7J912K.jpg' },
+          { id: 345, title: 'Eyes Wide Shut', vote_average: 7.5, release_date: '1999', genre_ids: [18, 9648], poster_path: '/knEALvO9kGz5L2kF2q4qR3gW12a.jpg' },
+          { id: 290098, title: 'The Handmaiden', vote_average: 8.3, release_date: '2016', genre_ids: [18, 53, 10749], poster_path: '/8Z8vd8uC8wQ8U6E3n3Y7n9K922x.jpg' },
+          { id: 1844, title: 'Wild Things', vote_average: 6.6, release_date: '1998', genre_ids: [9648, 53], poster_path: '/aFvN5K9yW6W8Z8M6U5q6Z6B911K.jpg' },
+          { id: 22897, title: 'Chloe', vote_average: 6.3, release_date: '2009', genre_ids: [18, 53], poster_path: '/5q8M6Z7n8W6Y5Q6w8M7Z6K911K.jpg' },
+          { id: 159008, title: 'Blue Is the Warmest Color', vote_average: 7.3, release_date: '2013', genre_ids: [18, 10749], poster_path: '/p8n9M7W6Y8Z6U5w8M7Z6K911K.jpg' },
+          { id: 82507, title: 'Shame', vote_average: 7.0, release_date: '2011', genre_ids: [18], poster_path: '/g7Wq6M8n8W6U5w8M7Z6K911K.jpg' },
+          { id: 43347, title: 'Love & Other Drugs', vote_average: 6.6, release_date: '2010', genre_ids: [10749, 35, 18], poster_path: '/zQ4m8N7W6Y8Z6U5w8M7Z6K911K.jpg' },
+          { id: 10835, title: 'Wild Orchid', vote_average: 5.6, release_date: '1989', genre_ids: [10749, 18], poster_path: '/3Y8wW6n8W6Y5Q6w8M7Z6K911K.jpg' }
+        ];
+
+        async function fetchMovies(category, query = '') {
+          if (query && query.trim()) {
+            try {
+              const url = `${TMDB_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=true`;
+              const res = await fetch(url);
+              if (res.ok) {
+                const data = await res.json();
+                return data.results || [];
+              }
+            } catch (e) {}
+            return CURATED_ADULT.filter(m => m.title.toLowerCase().includes(query.toLowerCase()));
+          }
+
+          let genreFilter = '10749,53,18';
+          let sort = 'popularity.desc';
+          if (category === 'thriller') genreFilter = '53,9648';
+          if (category === 'romance') genreFilter = '10749';
+          if (category === 'drama') genreFilter = '18';
+          if (category === 'top-rated') {
+            genreFilter = '10749,53,18';
+            sort = 'vote_average.desc&vote_count.gte=100';
+          }
+
+          try {
+            const url = `${TMDB_URL}/discover/movie?api_key=${TMDB_API_KEY}&include_adult=true&with_genres=${genreFilter}&sort_by=${sort}&page=1`;
+            const res = await fetch(url);
+            if (res.ok) {
+              const data = await res.json();
+              const fetched = data.results || [];
+              // Merge with curated list for best variety
+              const seen = new Set();
+              const merged = [];
+              for (const m of [...fetched, ...CURATED_ADULT]) {
+                if (!seen.has(m.id)) {
+                  seen.add(m.id);
+                  merged.push(m);
+                }
+              }
+              return merged;
+            }
+          } catch (e) {}
+
+          return CURATED_ADULT;
+        }
+
+        async function renderGrid() {
+          const grid = document.getElementById('ishan-movie-grid');
+          const query = document.getElementById('ishan-adult-search').value.trim();
+          grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: rgba(255,255,255,0.4); padding: 40px;">Loading adult movies…</p>';
+
+          const movies = await fetchMovies(currentCategory, query);
+          if (!movies.length) {
+            grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: rgba(255,255,255,0.4); padding: 40px;">No movies found.</p>';
+            return;
+          }
+
+          grid.innerHTML = '';
+          for (const m of movies) {
+            const card = document.createElement('div');
+            card.className = 'ishan-movie-card';
+            const title = m.title || m.name || 'Untitled';
+            const year = (m.release_date || '').slice(0, 4);
+            const rating = m.vote_average ? m.vote_average.toFixed(1) : '7.0';
+            const poster = m.poster_path ? `${TMDB_IMAGE_BASE}${m.poster_path}` : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"%3E%3Crect width="200" height="300" fill="%231a0e14"/%3E%3C/svg%3E';
+
+            card.innerHTML = `
+              <div class="ishan-poster-wrap">
+                <img src="${poster}" alt="${escapeHtml(title)}" class="ishan-poster" loading="lazy" />
+                <span class="ishan-badge-adult">18+</span>
+                <span class="ishan-badge-rating">★ ${rating}</span>
+                <div class="ishan-card-overlay">
+                  <div class="ishan-play-circle">▶</div>
+                </div>
+              </div>
+              <div class="ishan-card-info">
+                <div class="ishan-card-title">${escapeHtml(title)}</div>
+                <div class="ishan-card-meta">
+                  <span>${year || 'Movie'}</span>
+                  <span>•</span>
+                  <span>18+ Adult</span>
+                </div>
+              </div>
+            `;
+
+            card.onclick = () => openPlayer(m);
+            grid.appendChild(card);
+          }
+        }
+
+        function openPlayer(movie) {
+          currentMovie = movie;
+          const modal = document.getElementById('ishan-player-modal');
+          const title = document.getElementById('ishan-player-title');
+          const iframe = document.getElementById('ishan-player-iframe');
+          const serverSelect = document.getElementById('ishan-server-select');
+          const theatreLink = document.getElementById('ishan-link-theatre');
+
+          title.textContent = movie.title;
+          const server = serverSelect.value || 'tgvid';
+          iframe.src = SERVERS[server](movie.id);
+
+          theatreLink.href = `theatre.html?movie=${encodeURIComponent(movie.title)}&id=${movie.id}&type=movie`;
+          modal.classList.add('is-open');
+        }
+
+        function closePlayer() {
+          const modal = document.getElementById('ishan-player-modal');
+          const iframe = document.getElementById('ishan-player-iframe');
+          iframe.src = '';
+          modal.classList.remove('is-open');
+        }
+
+        // --- Wire Events ---
+        document.getElementById('ishan-player-close').onclick = closePlayer;
+        document.getElementById('ishan-server-select').onchange = (e) => {
+          if (currentMovie) {
+            const iframe = document.getElementById('ishan-player-iframe');
+            iframe.src = SERVERS[e.target.value](currentMovie.id);
+          }
+        };
+
+        // Category pills click
+        document.getElementById('ishan-cat-nav').addEventListener('click', (e) => {
+          const btn = e.target.closest('.ishan-cat-btn');
+          if (!btn) return;
+          document.querySelectorAll('.ishan-cat-btn').forEach(b => b.classList.remove('is-active'));
+          btn.classList.add('is-active');
+          currentCategory = btn.getAttribute('data-cat');
+          renderGrid();
+        });
+
+        // Search input
+        document.getElementById('ishan-adult-search').addEventListener('input', () => {
+          clearTimeout(searchDebounce);
+          searchDebounce = setTimeout(renderGrid, 300);
+        });
+
+        // Escape key to close modal
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') closePlayer();
+        });
+
+        function escapeHtml(str) {
+          if (!str) return '';
+          return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Initial load
+        renderGrid();
+      })();
+    </script>
+  </body>
+</html>

@@ -1,9 +1,9 @@
 /**
- * IshanFlix Personalized Recommendations & Hidden 18+ Adult Genre Engine
+ * IshanFlix Personalized Recommendations & Hidden 18+ Adult Cinema Trigger
  * - Local taste profiling & genre affinity scoring via localStorage
  * - TMDB Recommendation graph (/movie/{id}/recommendations & /discover/movie)
- * - Secret trigger: 5 rapid clicks on logo or typing '1818' to toggle 18+ Adult mode
- * - Integrated seamlessly into both index.html and theatre.html (IMAX cinema)
+ * - Secret trigger: 5 rapid taps on the IshanFlix logo opens adult.html in a new tab
+ * - Integrated cleanly into both index.html and theatre.html (IMAX cinema)
  */
 
 (function () {
@@ -15,7 +15,6 @@
 
   const STORAGE_KEY_HISTORY = 'ishan_watch_history';
   const STORAGE_KEY_TASTE = 'ishan_taste_profile';
-  const STORAGE_KEY_ADULT = 'ishan_adult_unlocked';
 
   // Standard TMDB Genre Mapping
   const GENRE_MAP = {
@@ -42,10 +41,8 @@
 
   class IshanFlixRecommendationEngine {
     constructor() {
-      this.activeTab = 'top-picks'; // 'top-picks', 'because-watched', 'adult'
-      this.isAdultUnlocked = localStorage.getItem(STORAGE_KEY_ADULT) === 'true';
+      this.activeTab = 'top-picks'; // 'top-picks' or 'because-watched'
       this.cache = new Map();
-      this.logoClickTimes = [];
       this.keyBuffer = '';
 
       this.initEventListeners();
@@ -78,7 +75,6 @@
       const history = this.getWatchHistory();
       const profile = this.getTasteProfile();
 
-      // Clean media object
       const item = {
         id: media.id || media.tmdbId || null,
         title: media.title,
@@ -87,12 +83,10 @@
         timestamp: Date.now()
       };
 
-      // Add to history (limit 20, deduplicated)
       const filtered = history.filter(h => h.title.toLowerCase() !== item.title.toLowerCase());
       filtered.unshift(item);
       localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(filtered.slice(0, 20)));
 
-      // Update genre affinity scores
       if (Array.isArray(item.genres)) {
         profile.genres = profile.genres || {};
         for (const g of item.genres) {
@@ -104,7 +98,6 @@
         localStorage.setItem(STORAGE_KEY_TASTE, JSON.stringify(profile));
       }
 
-      // Re-render recommendations if container exists
       this.refreshRecommendations();
     }
 
@@ -116,7 +109,6 @@
         .map(entry => Number(entry[0]))
         .filter(gid => !isNaN(gid));
 
-      // Defaults if new user
       if (sorted.length === 0) {
         return [878, 28, 53]; // Sci-Fi, Action, Thriller default
       }
@@ -135,24 +127,18 @@
       return score;
     }
 
-    // --- Secret Adult 18+ Trigger Logic ---
-    toggleAdultMode(forceState) {
-      this.isAdultUnlocked = forceState !== undefined ? forceState : !this.isAdultUnlocked;
-      localStorage.setItem(STORAGE_KEY_ADULT, this.isAdultUnlocked ? 'true' : 'false');
-
-      if (this.isAdultUnlocked) {
-        this.showToast('🔞 Adult (18+) Mode Unlocked — Mature library is now revealed', true);
-        this.activeTab = 'adult';
-      } else {
-        this.showToast('🔒 Adult Mode Locked — Mature titles are hidden', false);
-        if (this.activeTab === 'adult') {
-          this.activeTab = 'top-picks';
+    // --- Secret Adult 18+ Trigger: Opens adult.html in a New Tab ---
+    openAdultTab() {
+      this.showToast('🔞 Opening Adult (18+) Cinema in a new tab…', true);
+      try {
+        const win = window.open('adult.html', '_blank');
+        if (!win || win.closed || typeof win.closed === 'undefined') {
+          // Popup blocked fallback
+          window.location.href = 'adult.html';
         }
+      } catch (e) {
+        window.location.href = 'adult.html';
       }
-
-      this.updatePillsUi();
-      this.refreshRecommendations();
-      this.updateTheatreModalTabs();
     }
 
     showToast(message, isUnlocked) {
@@ -174,34 +160,45 @@
     }
 
     initEventListeners() {
-      // 1. Logo 5-click secret trigger
+      // 1. Tapping the IshanFlix Logo 5 times opens a new tab with adult movies!
+      let tapCount = 0;
+      let lastTapTime = 0;
+
       document.addEventListener('click', (e) => {
-        const target = e.target.closest('header, nav, .ishan-logo, [class*="logo"], [class*="brand"], [class*="title"]');
-        const text = (target && target.textContent) || '';
-        if (text.toLowerCase().includes('ishan') || (target && target.tagName === 'HEADER')) {
+        const logo = e.target.closest('a[aria-label*="IshanFlix" i], [aria-label*="IshanFlix home" i], [class*="tracking-[0.42em]"], [class*="tracking-[0.45em]"], .ishan-brand-title');
+        const header = e.target.closest('header');
+        const text = (e.target.textContent || '').trim();
+        const isLogo = logo || (header && text.includes('IshanFlix'));
+
+        if (isLogo) {
           const now = Date.now();
-          this.logoClickTimes.push(now);
-          // Keep only clicks within last 3.5 seconds
-          this.logoClickTimes = this.logoClickTimes.filter(t => now - t < 3500);
-          if (this.logoClickTimes.length >= 5) {
-            this.logoClickTimes = [];
-            this.toggleAdultMode();
+          if (now - lastTapTime < 900) {
+            tapCount++;
+          } else {
+            tapCount = 1;
+          }
+          lastTapTime = now;
+
+          if (tapCount >= 5) {
+            e.preventDefault();
+            e.stopPropagation();
+            tapCount = 0;
+            this.openAdultTab();
           }
         }
-      });
+      }, true); // Use capture phase so we intercept before link navigation!
 
       // 2. Secret code typing trigger ('1818' or 'adult')
       window.addEventListener('keydown', (e) => {
-        // Skip if typing in an input (except search)
         if (e.target && e.target.tagName === 'INPUT' && !e.target.placeholder.toLowerCase().includes('search')) {
           return;
         }
 
-        if (e.key.length === 1) {
+        if (e.key && e.key.length === 1) {
           this.keyBuffer = (this.keyBuffer + e.key.toLowerCase()).slice(-8);
           if (this.keyBuffer.endsWith('1818') || this.keyBuffer.endsWith('adult')) {
             this.keyBuffer = '';
-            this.toggleAdultMode();
+            this.openAdultTab();
           }
         }
       });
@@ -212,7 +209,7 @@
           const val = e.target.value.trim().toLowerCase();
           if (val === '1818' || val === 'adult') {
             e.target.value = '';
-            this.toggleAdultMode();
+            this.openAdultTab();
           }
         }
       });
@@ -241,7 +238,7 @@
       return null;
     }
 
-    // --- Recommendation Query Engines ---
+    // --- Recommendation Queries ---
     async getTopPicks() {
       const topGenres = this.getTopGenres(2);
       const genreParam = topGenres.join(',');
@@ -268,7 +265,6 @@
           results: data.results.slice(0, 16)
         };
       }
-      // Fallback to top genres
       const topPicks = await this.getTopPicks();
       return { title: latest.title, results: topPicks };
     }
@@ -278,49 +274,17 @@
       return (data && data.results) ? data.results.slice(0, 16) : [];
     }
 
-    async getAdultRecommendations() {
-      // 1. Query TMDB with adult flag + mature romance/thriller discovery
-      const endpoint = `/discover/movie?include_adult=true&sort_by=popularity.desc&certification_country=US&with_genres=10749,53,18&page=1`;
-      const data = await this.tmdbFetch(endpoint);
-      let results = (data && data.results) ? data.results : [];
-
-      // Curated iconic 18+ mature movies to ensure rich catalog
-      const adultCurated = [
-        { id: 664413, title: '365 Days', vote_average: 6.8, genre_ids: [10749, 18], poster_path: '/6KIm8L9u6E4eE5N37iR4W6E9W1s.jpg' },
-        { id: 216015, title: 'Fifty Shades of Grey', vote_average: 6.5, genre_ids: [10749, 18], poster_path: '/93mMbA11h8CgK8Jp6iM6f99zW6B.jpg' },
-        { id: 402, title: 'Basic Instinct', vote_average: 7.0, genre_ids: [9648, 53], poster_path: '/p244mK8wWd8hU2G3q2gGZ7J912K.jpg' },
-        { id: 345, title: 'Eyes Wide Shut', vote_average: 7.5, genre_ids: [18, 9648], poster_path: '/knEALvO9kGz5L2kF2q4qR3gW12a.jpg' },
-        { id: 290098, title: 'The Handmaiden', vote_average: 8.3, genre_ids: [18, 53, 10749], poster_path: '/8Z8vd8uC8wQ8U6E3n3Y7n9K922x.jpg' },
-        { id: 1844, title: 'Wild Things', vote_average: 6.6, genre_ids: [9648, 53], poster_path: '/aFvN5K9yW6W8Z8M6U5q6Z6B911K.jpg' },
-        { id: 22897, title: 'Chloe', vote_average: 6.3, genre_ids: [18, 53], poster_path: '/5q8M6Z7n8W6Y5Q6w8M7Z6K911K.jpg' },
-        { id: 159008, title: 'Blue Is the Warmest Color', vote_average: 7.3, genre_ids: [18, 10749], poster_path: '/p8n9M7W6Y8Z6U5w8M7Z6K911K.jpg' }
-      ];
-
-      // Merge and deduplicate
-      const seen = new Set();
-      const combined = [];
-      for (const m of [...results, ...adultCurated]) {
-        if (!seen.has(m.id)) {
-          seen.add(m.id);
-          combined.push(m);
-        }
-      }
-      return combined.slice(0, 16);
-    }
-
     // --- DOM Injection & UI Rendering ---
     initDomInjection() {
-      // Don't inject homepage shelf inside theatre.html
-      if (window.location.pathname.includes('theatre.html')) {
+      if (window.location.pathname.includes('theatre.html') || window.location.pathname.includes('adult.html')) {
         return;
       }
 
-      const tryInject = () => {
+      const injectWhenReady = () => {
         if (document.getElementById('ishan-rec-section')) return;
 
-        // Find insertion point on homepage (above catalog / under header)
-        const container = document.querySelector('main') || document.getElementById('root') || document.body;
-        if (!container) return;
+        const main = document.querySelector('main');
+        if (!main) return;
 
         const section = document.createElement('section');
         section.id = 'ishan-rec-section';
@@ -336,9 +300,7 @@
                 Personalized picks based on your viewing history
               </div>
             </div>
-            <div class="ishan-rec-pills" id="ishan-rec-pills">
-              <!-- Rendered dynamically -->
-            </div>
+            <div class="ishan-rec-pills" id="ishan-rec-pills"></div>
           </div>
           <div class="ishan-rec-carousel-wrap">
             <div class="ishan-rec-carousel" id="ishan-rec-carousel">
@@ -350,23 +312,24 @@
           </div>
         `;
 
-        // Insert at a prominent position
-        const targetSibling = container.querySelector('header, .hero, [class*="hero"], nav');
-        if (targetSibling && targetSibling.nextSibling) {
-          container.insertBefore(section, targetSibling.nextSibling);
+        // Insert neatly before the first movie carousel tray
+        const firstRow = main.querySelector('.snap-x, [class*="snap"], [class*="grid-cols"]');
+        if (firstRow && firstRow.parentElement) {
+          firstRow.parentElement.insertBefore(section, firstRow);
         } else {
-          container.prepend(section);
+          main.appendChild(section);
         }
 
         this.updatePillsUi();
         this.refreshRecommendations();
       };
 
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', tryInject);
-      } else {
-        setTimeout(tryInject, 400);
-      }
+      setTimeout(injectWhenReady, 600);
+      setInterval(() => {
+        if (!document.getElementById('ishan-rec-section') && !window.location.pathname.includes('theatre') && !window.location.pathname.includes('adult')) {
+          injectWhenReady();
+        }
+      }, 2500);
     }
 
     updatePillsUi() {
@@ -391,18 +354,8 @@
         `;
       }
 
-      // Hidden Adult Pill (only if unlocked!)
-      if (this.isAdultUnlocked) {
-        html += `
-          <button class="ishan-rec-pill is-adult-pill ${this.activeTab === 'adult' ? 'is-active' : ''}" data-tab="adult">
-            <span>🔞</span> Adult 18+
-          </button>
-        `;
-      }
-
       pillsContainer.innerHTML = html;
 
-      // Wire tab click handlers
       pillsContainer.querySelectorAll('.ishan-rec-pill').forEach(btn => {
         btn.onclick = () => {
           this.activeTab = btn.getAttribute('data-tab');
@@ -418,7 +371,6 @@
       const subtitle = document.getElementById('ishan-rec-subtitle');
       if (!carousel) return;
 
-      // Render skeletons
       carousel.innerHTML = `
         <div class="ishan-rec-skeleton"></div>
         <div class="ishan-rec-skeleton"></div>
@@ -429,12 +381,7 @@
       let movies = [];
       let whyTag = 'Top Pick';
 
-      if (this.activeTab === 'adult' && this.isAdultUnlocked) {
-        if (heading) heading.textContent = '🔞 Adult (18+) Recommendations';
-        if (subtitle) subtitle.textContent = 'Curated 18+ adult and mature cinema from the library';
-        movies = await this.getAdultRecommendations();
-        whyTag = '18+ Adult';
-      } else if (this.activeTab === 'because-watched') {
+      if (this.activeTab === 'because-watched') {
         const res = await this.getBecauseWatchedRecommendations();
         if (heading) heading.textContent = `Because You Watched "${res.title}"`;
         if (subtitle) subtitle.textContent = 'Titles with similar directors, plot, and themes';
@@ -455,14 +402,14 @@
 
       carousel.innerHTML = '';
       for (const m of movies) {
-        const card = this.createMovieCard(m, whyTag, this.activeTab === 'adult');
+        const card = this.createMovieCard(m, whyTag);
         carousel.appendChild(card);
       }
     }
 
-    createMovieCard(movie, whyTag, isAdult) {
+    createMovieCard(movie, whyTag) {
       const card = document.createElement('div');
-      card.className = `ishan-rec-card ${isAdult ? 'is-adult-card' : ''}`;
+      card.className = 'ishan-rec-card';
       const title = movie.title || movie.name || 'Untitled';
       const year = (movie.release_date || movie.first_air_date || '').slice(0, 4);
       const rating = movie.vote_average ? movie.vote_average.toFixed(1) : null;
@@ -476,9 +423,7 @@
             : `<div class="ishan-rec-poster-fallback"><span>${this.escapeHtml(title)}</span></div>`
           }
           <div class="ishan-rec-badge-stack">
-            <span class="ishan-match-badge ${isAdult ? 'is-adult-badge' : 'is-high'}">
-              ${isAdult ? '🔞 18+' : `${matchScore}% Match`}
-            </span>
+            <span class="ishan-match-badge is-high">${matchScore}% Match</span>
             <span class="ishan-rec-why-badge">${this.escapeHtml(whyTag)}</span>
           </div>
           ${rating ? `<div class="ishan-rec-rating">★ ${rating}</div>` : ''}
@@ -510,7 +455,6 @@
       const id = movie.id;
       const type = 'movie';
 
-      // If inside theatre.html, play on IMAX screen directly!
       if (window.__cinema && typeof window.__cinema.playOnScreen === 'function') {
         const streamUrl = `https://tgvid.lovable.app/embed/movie/${id}`;
         window.__cinema.playOnScreen(streamUrl, {
@@ -521,20 +465,17 @@
           window.__cinema.ensureSeated();
         }
       } else {
-        // Navigate to theatre cinema view with full parameters
         window.location.href = `theatre.html?movie=${encodeURIComponent(title)}&id=${id}&type=${type}`;
       }
     }
 
     // --- Hooking 3D Theatre IMAX Modal ---
     updateTheatreModalTabs() {
-      // If we are in theatre.html, inject "For You" & "Adult 18+" tabs into the catalog modal
       if (!window.location.pathname.includes('theatre.html')) return;
 
       const modalTabsContainer = document.querySelector('.overflow-x-auto.px-4.py-2\\.5, [class*="overflow-x-auto"]');
       if (!modalTabsContainer) return;
 
-      // Check if already injected
       if (!modalTabsContainer.querySelector('.ishan-theatre-foryou-pill')) {
         const forYouBtn = document.createElement('button');
         forYouBtn.className = 'ishan-rec-pill ishan-theatre-foryou-pill';
@@ -544,40 +485,26 @@
         };
         modalTabsContainer.appendChild(forYouBtn);
       }
-
-      const existingAdultBtn = modalTabsContainer.querySelector('.ishan-theatre-adult-pill');
-      if (this.isAdultUnlocked && !existingAdultBtn) {
-        const adultBtn = document.createElement('button');
-        adultBtn.className = 'ishan-rec-pill is-adult-pill ishan-theatre-adult-pill';
-        adultBtn.innerHTML = '<span>🔞</span> Adult 18+';
-        adultBtn.onclick = () => {
-          this.renderTheatreRecommendationsModal(true);
-        };
-        modalTabsContainer.appendChild(adultBtn);
-      } else if (!this.isAdultUnlocked && existingAdultBtn) {
-        existingAdultBtn.remove();
-      }
     }
 
-    async renderTheatreRecommendationsModal(isAdult = false) {
-      // Find modal content grid
+    async renderTheatreRecommendationsModal() {
       const contentGrid = document.querySelector('.overflow-y-auto.overscroll-contain, [class*="overflow-y-auto"]');
       if (!contentGrid) return;
 
       contentGrid.innerHTML = `
         <div style="padding: 20px; display: flex; align-items: center; justify-content: center; gap: 10px; color: rgba(255,255,255,0.7);">
-          <span style="animation: spin 1s infinite linear;">↻</span> Loading ${isAdult ? 'Adult 18+' : 'personalized'} recommendations…
+          <span style="animation: spin 1s infinite linear;">↻</span> Loading personalized recommendations…
         </div>
       `;
 
-      const movies = isAdult ? await this.getAdultRecommendations() : await this.getTopPicks();
+      const movies = await this.getTopPicks();
       contentGrid.innerHTML = `
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; padding: 12px 4px;"></div>
       `;
       const grid = contentGrid.firstElementChild;
 
       for (const m of movies) {
-        const card = this.createMovieCard(m, isAdult ? '18+ Adult' : 'Match', isAdult);
+        const card = this.createMovieCard(m, 'Match');
         card.style.flex = 'none';
         card.style.maxWidth = '100%';
         grid.appendChild(card);
@@ -585,7 +512,6 @@
     }
 
     hookCinemaPlayer() {
-      // Check for cinema tick or play hook
       const checkCinema = () => {
         if (window.__cinema && !window.__cinema._recHooked) {
           window.__cinema._recHooked = true;
